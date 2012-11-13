@@ -6,7 +6,11 @@ div.navbar.navbar-fixed-top
         li.active: a.home_link Home
       ul.nav.pull-right
         li.dropdown
-          a.dropdown-toggle(data-toggle='dropdown', data-target='#') #{user}
-          b.caret
-          ul.dropdown-menu
-            li: a.logout(href='/logout') Logout
+          if user == ''
+            a.tlogin(href='/tlogin')
+              img.twitter_login_img(src='/img/sign-in-with-twitter-gray.png')
+          else
+            a.dropdown-toggle(data-toggle='dropdown', data-target='#') #{user}
+            b.caret
+            ul.dropdown-menu
+              li: a.logout(href='/logout') Logout

@@ -10,24 +10,24 @@ var Express = require('express'),
 
 /* Server Configuration */
 server.configure(function(){
-  server.use(express.logger());
+  server.use(Express.logger());
   server.set('views', __dirname + '/views');
   server.set('view engine', 'jade');
-  server.use(express.bodyParser());
-  server.use(express.cookieParser());
-  server.use(express.session({secret: 'testing this stuff');//, store: new RedisStore}));
-  server.use(express.methodOverride());
+  server.use(Express.bodyParser());
+  server.use(Express.cookieParser());
+  server.use(Express.session({secret: 'testing this stuff'}));//, store: new RedisStore}));
+  server.use(Express.methodOverride());
   server.use(server.router);
-  server.use(express.static(__dirname + '/public'));
-  server.use(express.errorHandler({showStack: true, dumpExceptions: true}));
+  server.use(Express.static(__dirname + '/public'));
+  server.use(Express.errorHandler({showStack: true, dumpExceptions: true}));
 });
 
 server.configure('development', function(){
-  server.use(express.errorHandler({ dumpExceptions: true, showStack: true }));
+  server.use(Express.errorHandler({ dumpExceptions: true, showStack: true }));
 });
 
 server.configure('production', function(){
-  server.use(express.errorHandler());
+  server.use(Express.errorHandler());
 });
 
 server.get('/', routes.index);
