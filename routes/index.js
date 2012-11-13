@@ -9,7 +9,8 @@ var r = require('request'),
 
 exports.routes = {
 	index: function(req, res, next) {
-
+		var name = req.session.access_token ? req.session.access_token.screen_name : '';
+		res.render('index', {user: name});
 	},
 	auth_cb: function(req, res, next) {
 				var v = qs.parse(body);

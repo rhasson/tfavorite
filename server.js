@@ -30,3 +30,7 @@ server.configure('production', function(){
   server.use(express.errorHandler());
 });
 
+server.get('/', routes.index);
+server.get('/tlogin', routes.twitter_login);
+
+server.listen(8000);
