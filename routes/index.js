@@ -5,17 +5,19 @@
 
 var r = require('request'),
 		qs = require('querystring'),
-		config = require('../config').config;
+		config = require('../config').config,
+		url = require('url');
 
 exports.routes = {
 	index: function(req, res, next) {
+console.log('SESSION: ', req.session);
 		var name = req.session.access_token ? req.session.access_token.screen_name : '';
 		res.render('home', {user: name});
 	},
 	auth_cb: function(req, res, next) {
-				var v = qs.parse(body);
+				var v = qs.parse(url.parse(req.url).query);
 				if (!v.denied){
-					req.session.access_token.oauth_verifier = body.oauth_verifier;
+					req.session.access_token.oauth_verifier = v.oauth_verifier;
 					var oauth = {
 								consumer_key: config.twitter.consumer_key,
 								consumer_secret: config.twitter.consumer_secret,
@@ -42,6 +44,7 @@ exports.routes = {
 							r.get({url: u, oauth: req.session.oauth, json: true}, function(err2, resp2, user) {
 								if (!err2 && resp2.statusCode === 200) {
 									console.log(user);
+									res.redirect('/');
 								}
 							});
 						}
