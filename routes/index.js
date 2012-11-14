@@ -10,9 +10,37 @@ var r = require('request'),
 
 exports.routes = {
 	index: function(req, res, next) {
-console.log('SESSION: ', req.session);
-		var name = req.session.access_token ? req.session.access_token.screen_name : '';
-		res.render('home', {user: name});
+		var name, u, params;
+		if (req.session.access_token) {
+			name = req.session.access_token.screen_name;
+			u = config.twitter.base_url + '/1.1/favorites/list.json?';
+			u += qs.stringify({
+				user_id: req.session.access_token.user_id,
+				count: 5,
+				include_entities: true
+			});
+			r.get({url: u, oauth: req.session.oauth, json: true}, function(err, resp, body) {
+				if (!err && resp.statusCode === 200) {
+					var list = body.map(function(v, i) {
+						return {
+							text: v.text,
+							urls: v.entities.urls,
+							user : {
+								id: v.user.id,
+								pic: v.user.profile_image_url,
+								screen_name: v.user.screen_name
+							},
+							retweet_count: v.retweet_count,
+							created_at: v.created_at,
+							fav_id: v.id
+						}
+					});
+					res.render('favs', {user: req.session.access_token.screen_name, favs: list});
+				}
+			});
+		} else {
+			res.render('home', {user: ''});
+		}
 	},
 	auth_cb: function(req, res, next) {
 				var v = qs.parse(url.parse(req.url).query);
@@ -35,7 +63,7 @@ console.log('SESSION: ', req.session);
 								token: req.session.access_token.oauth_token,
 								token_secret: req.session.access_token.oauth_token_secret
 							};
-							var u = config.twitter.base_url + '/1/users/show.json?',
+							var u = config.twitter.base_url + '/1.1/users/show.json?',
 									params = {
 										screen_name: req.session.access_token.screen_name,
 										user_id: req.session.access_token.user_id
@@ -43,7 +71,7 @@ console.log('SESSION: ', req.session);
 							u += qs.stringify(params);
 							r.get({url: u, oauth: req.session.oauth, json: true}, function(err2, resp2, user) {
 								if (!err2 && resp2.statusCode === 200) {
-									console.log(user);
+									req.session.user = user;
 									res.redirect('/');
 								}
 							});
@@ -72,3 +100,6 @@ console.log('SESSION: ', req.session);
 	}
 }
 
+function getFavorites() {
+	
+}
