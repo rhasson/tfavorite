@@ -1,14 +1,17 @@
 extends ../layout
 
 block content
-  div.container
+  div.content
     div.meny
       include categories
     div.meny-arrow
     div.favcontents
-      div.well(style='margin-top: 10%')
-        include list
+      div.container
+        block fav_items
+          div.well(style='margin-top: 5%')
+            include list
 
 block append scripts
-  script(src='/js/meny.min.js')
-  script(src='/js/meny_controller.js')
+  script(src='js/meny.min.js')
+  script(src='js/controller.js')
+  script(src='js/jquery.freetile.min.js')

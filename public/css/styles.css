@@ -1,3 +1,28 @@
+html, 
+body {
+	height: 100%;
+	overflow: hidden;
+}
+a {
+	color: #c2575b;
+	text-decoration: none;
+
+	-webkit-transition: 0.15s color ease;
+	   -moz-transition: 0.15s color ease;
+	    -ms-transition: 0.15s color ease;
+	     -o-transition: 0.15s color ease;
+	        transition: 0.15s color ease;
+}
+	a:hover {
+		color: #f76f76;
+	}
+
+h1, 
+h2,
+h3 {
+	margin-top: 20px;
+	font-size: 24px;
+}
 .meny {
 	display: none;
 	padding: 20px;
@@ -112,3 +137,12 @@
 		position: absolute;
 		bottom: 20px;
 	}
+
+.el_item {
+	padding: 10px;
+	margin: 10px;
+	background: #eee;
+  	-moz-box-shadow:    3px 3px 9px -1px #ccc;
+  	-webkit-box-shadow: 3px 3px 9px -1px #ccc;
+  	box-shadow:         3px 3px 9px -1px #ccc;
+}
