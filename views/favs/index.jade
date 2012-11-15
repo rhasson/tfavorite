@@ -2,5 +2,13 @@ extends ../layout
 
 block content
   div.container
-    div.well(style='margin-top: 10%')
-      include list
+    div.meny
+      include categories
+    div.meny-arrow
+    div.favcontents
+      div.well(style='margin-top: 10%')
+        include list
+
+block append scripts
+  script(src='/js/meny.min.js')
+  script(src='/js/meny_controller.js')
