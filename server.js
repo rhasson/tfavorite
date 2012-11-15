@@ -34,4 +34,4 @@ server.get('/', routes.index);
 server.get('/tlogin', routes.twitter_login);
 server.get('/auth_cb', routes.auth_cb);
 
-server.listen(80); //8001
+server.listen(8001); //8001
