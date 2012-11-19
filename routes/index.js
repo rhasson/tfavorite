@@ -16,7 +16,7 @@ exports.routes = {
 			u = config.twitter.base_url + '/1.1/favorites/list.json?';
 			u += qs.stringify({
 				user_id: req.session.access_token.user_id,
-				count: 5,
+				count: 10,
 				include_entities: true
 			});
 			r.get({url: u, oauth: req.session.oauth, json: true}, function(err, resp, body) {
@@ -28,7 +28,8 @@ exports.routes = {
 							user : {
 								id: v.user.id,
 								pic: v.user.profile_image_url,
-								screen_name: v.user.screen_name
+								screen_name: v.user.screen_name,
+								name: v.user.name
 							},
 							retweet_count: v.retweet_count,
 							created_at: v.created_at,
@@ -101,5 +102,5 @@ exports.routes = {
 }
 
 function getFavorites() {
-	
+
 }
