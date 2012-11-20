@@ -145,4 +145,14 @@ h3 {
   	-moz-box-shadow:    3px 3px 9px -1px #ccc;
   	-webkit-box-shadow: 3px 3px 9px -1px #ccc;
   	box-shadow:         3px 3px 9px -1px #ccc;
+  	border:1px solid #fff;
+}
+.profile_header_label {
+	display: inline-block;
+	padding: 2px 4px;
+	white-space: nowrap;
+	vertical-align: baseline;
+}
+.text {
+	text-align: center;
 }
