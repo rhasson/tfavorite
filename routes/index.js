@@ -6,42 +6,21 @@
 var r = require('request'),
 		qs = require('querystring'),
 		config = require('../config').config,
-		url = require('url');
+		url = require('url'),
+		async = require('async');
 
 exports.routes = {
 	index: function(req, res, next) {
-		var name, u, params;
-		if (req.session.access_token) {
-			name = req.session.access_token.screen_name;
-			u = config.twitter.base_url + '/1.1/favorites/list.json?';
-			u += qs.stringify({
-				user_id: req.session.access_token.user_id,
-				count: 10,
-				include_entities: true
-			});
-			r.get({url: u, oauth: req.session.oauth, json: true}, function(err, resp, body) {
-				if (!err && resp.statusCode === 200) {
-					var list = body.map(function(v, i) {
-						return {
-							text: v.text,
-							urls: v.entities.urls,
-							user : {
-								id: v.user.id,
-								pic: v.user.profile_image_url,
-								screen_name: v.user.screen_name,
-								name: v.user.name
-							},
-							retweet_count: v.retweet_count,
-							created_at: v.created_at,
-							fav_id: v.id
-						}
-					});
-					res.render('favs', {user: req.session.access_token.screen_name, favs: list});
-				}
-			});
-		} else {
-			res.render('home', {user: ''});
-		}
+		async.waterfall([
+			function(cb) { getFavorites(req, 10, cb); },
+			function(obj, cb) { sortList('ascend', obj, cb); },
+			function(sortedlist, cb) { render(sortedlist, cb); }
+			//function(sortedlist, cb) { embedMedia(sortedlist, cb); }
+			//function(embededlist, cb) { render(embededlist, cb); }
+		], function(err, list) {
+			if (!err) res.render('favs', {user: req.session.access_token.screen_name, favs: list});
+			else res.render('home', {user: ''});
+		});
 	},
 	auth_cb: function(req, res, next) {
 				var v = qs.parse(url.parse(req.url).query);
@@ -101,6 +80,88 @@ exports.routes = {
 	}
 }
 
-function getFavorites() {
+function getFavorites(req, count, cb) {
+	var name, u, params;
+	if (req.session.access_token) {
+		name = req.session.access_token.screen_name;
+		u = config.twitter.base_url + '/1.1/favorites/list.json?';
+		u += qs.stringify({
+			user_id: req.session.access_token.user_id,
+			count: count || 10,
+			include_entities: true
+		});
+		r.get({url: u, oauth: req.session.oauth, json: true}, function(err, resp, body) {
+			if (!err && resp.statusCode === 200) {
+				return cb(null, body);
+			} else return cb(err);
+		});
+	} else return cb(true);
+}
 
+/*
+* Sort list of favorites based on a given method
+* @method: method to sort based on
+* @list: an array of favorite objects
+*/
+function sortList(method, list, cb) {
+	list.forEach(function(v, i) {
+		console.log('ENTITIES: ', v.entities)
+		console.log('USER ENTITIES: ', v.user.entities)
+	});
+	return cb(null, list);
+}
+
+/*
+* Extract media links and embed directly into layout
+* @list of favorites to parse
+*/
+function embedMedia(list, cb) {
+	var newlist = [];
+	async.forEach(list, checkEmbed, function(err) {
+		if (!err) return cb(null, newlist);
+		else return cb(null, list);
+	});
+
+	function checkEmbed(v, cback) {
+		var host = url.parse(v.entities.urls[0].expanded_url).host,
+				o = {
+					url: v.entities.urls[0].expanded_url,
+					width: 435,
+					height: 244
+				},
+				u = config.vimeo.oembed_url + '?' + qs.stringify(o);
+		switch (host) {
+			case 'vimeo.com':
+				r.get({url: u, json: true}, function(err, resp, body) {
+					if (!err && resp.statusCode === 200) {
+						v.entities.urls.embeded_url = body.html;
+						newlist.push(v);
+						return cback();
+					} else return cback(err);
+				});
+				break;
+			default: 
+				newlist.push(v);
+				return cback();
+		}
+	}
+}
+
+function render(list, cb) {
+	var newlist = list.map(function(v, i) {
+		return {
+			text: v.text,
+			urls: v.entities.urls,
+			user : {
+				id: v.user.id,
+				pic: v.user.profile_image_url,
+				screen_name: v.user.screen_name,
+				name: v.user.name
+			},
+			retweet_count: v.retweet_count,
+			created_at: v.created_at,
+			fav_id: v.id
+		}
+	});
+	return cb(null, newlist);
 }

@@ -1,9 +1,13 @@
 div.list
   each item in favs
     div.el_item.span10
-      div.profile_pic.span1: img.img-polaroid.img-rounded(src='#{item.user.pic}')
-      div.profile_header.row-fluid
-        span.profile_header_label: h5 @#{item.user.screen_name}
-        span.profile_header_label: h6 (#{item.user.name})
-      div.row-fluid
-        span.span10 #{item.text}
+      div.profile_pic.media
+        a.pull-left(href='#')
+          img.img-polaroid.img-rounded.media-object(src='#{item.user.pic}')
+        div.profile_header.media-body
+          span.profile_header_label: h5 @#{item.user.screen_name}
+          span.profile_header_label: h6 (#{item.user.name})
+        div.row-fluid
+          span.span10 #{item.text}
+        div.extended-media.row-fluid
+          div.embeded-media

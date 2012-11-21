@@ -1,0 +1,6 @@
+var r = require('request');
+
+r.get({url: 'http://t.co/Wff86tKw'}, function(err, resp, body) {
+	console.log('HOST: ', resp.request.host);
+	console.log('PATH: ', resp.request.path);
+});
