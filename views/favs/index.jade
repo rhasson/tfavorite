@@ -5,10 +5,11 @@ block content
     div.meny
       include categories
     div.meny-arrow
-    div.favcontents
+    div.favcontents(ng-controller='favListCtrl')
       div.container
+        div.loading h3 Loading...
         block fav_items
-          div.well(style='margin-top: 5%')
+          div(style='margin-top: 5%')
             include list
 
 block append scripts

@@ -33,5 +33,6 @@ server.configure('production', function(){
 server.get('/', routes.index);
 server.get('/tlogin', routes.twitter_login);
 server.get('/auth_cb', routes.auth_cb);
+server.get('/favs', routes.get_favorites)
 
 server.listen(80); //8002

@@ -11,6 +11,9 @@ var r = require('request'),
 
 exports.routes = {
 	index: function(req, res, next) {
+		if (req.session && req.session.access_token) res.render('favs', {user: req.session.access_token.screen_name});
+		else res.render('home', {user: ''});
+/*		
 		async.waterfall([
 			function(cb) { getFavorites(req, 10, cb); },
 			function(obj, cb) { sortList('ascend', obj, cb); },
@@ -21,6 +24,7 @@ exports.routes = {
 			if (!err) res.render('favs', {user: req.session.access_token.screen_name, favs: list});
 			else res.render('home', {user: ''});
 		});
+*/
 	},
 	auth_cb: function(req, res, next) {
 				var v = qs.parse(url.parse(req.url).query);
@@ -77,17 +81,30 @@ exports.routes = {
 					qs.stringify({oauth_token: req.session.access_token.oauth_token}));
 			} else console.log(body);
 		});
+	},
+	get_favorites: function(req, res, next) {
+		getFavorites(req, req.query.limit, function(err, data){
+			if (!err) {
+				render(data, function(err, list) {
+					res.json(list);
+				});
+			} else next();
+		});
 	}
 }
 
 function getFavorites(req, count, cb) {
 	var name, u, params;
+	if (typeof count === 'function') {
+		cb = count;
+		count = 10;
+	}
 	if (req.session.access_token) {
 		name = req.session.access_token.screen_name;
 		u = config.twitter.base_url + '/1.1/favorites/list.json?';
 		u += qs.stringify({
 			user_id: req.session.access_token.user_id,
-			count: count || 10,
+			count: count,
 			include_entities: true
 		});
 		r.get({url: u, oauth: req.session.oauth, json: true}, function(err, resp, body) {

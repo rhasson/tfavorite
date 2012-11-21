@@ -25,4 +25,24 @@ $(document).ready(function() {
 	}
 	
 	$('.favcontents').innerHeight(viewport().height);
+
 });
+
+function favListCtrl($scope, $http) {
+	var resp = $http({
+			method: 'GET',
+			url: '/favs',
+			params: {limit: 20}
+	});
+	resp.success(function(data, status) {
+		if (status === 200 && data) {
+			$scope.list = data;
+			$('div.loading').remove()
+		} else {
+			$scope.list = [];
+		}
+	});
+	resp.error(function(data, status) {
+		console.error('Failed to get favorites from server: ', data);
+	});
+}
