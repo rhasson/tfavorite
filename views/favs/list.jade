@@ -12,6 +12,9 @@ div.list
           a.fav_link(ng-href='{{item.urls.url}}', target='_blank') {{item.urls.display_url}}
       div.extended-media.well.row-fluid.hide
         div.embeded(ng-bind-html-unsafe='embeded_data.html')
+        span.profile_header_label: h5 {{embeded_data.title}}
+        span.profile_header_label
+          a(href='{{embeded_data.author_url}}', target='_blank'): h6 {{embeded_data.author_name}}
       div.actions.row-fluid.pull-right
         div.span1.pull-right: a(href='#', ng-click='removeFav(item, event)') Remove
         div.span1.pull-right: a(href='#', ng-click='shareFav(item, event)') Share

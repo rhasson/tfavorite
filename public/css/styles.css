@@ -157,7 +157,7 @@ h3 {
 	text-align: center;
 }
 .extended-media {
-	height: 200px;
+	height: auto;
 }
 iframe {
   padding: 4px;
