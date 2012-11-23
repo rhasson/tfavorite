@@ -1,5 +1,5 @@
 div.list
-  div.el_item.span10(ng-repeat='item in list')
+  div.el_item.span10(fav-item, ng-repeat='item in list')
     div.profile_pic.media
       a.pull-left(href='#')
         img.img-polaroid.img-rounded.media-object(ng-src='{{item.user.pic}}')
@@ -7,6 +7,8 @@ div.list
         span.profile_header_label: h5 @{{item.user.screen_name}}
         span.profile_header_label: h6 ({{item.user.name}})
       div.row-fluid
-        span.span10 {{item.text}}
-      div.extended-media.row-fluid
-        div.embeded-media
+        span.span10
+          {{item.text}}
+          a.fav_link(ng-href='{{item.urls.url}}', target='_blank') {{item.urls.display_url}}
+      div.extended-media.well.row-fluid.hide
+          div.embeded(ng-bind-html-unsafe='embeded_data')

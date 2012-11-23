@@ -90,6 +90,16 @@ exports.routes = {
 				});
 			} else next();
 		});
+	},
+	get_embed: function(req, res, next) {
+		var o = {
+			id: req.params.id,
+			url: req.query.url
+		};
+		getEmbededMedia(o, function(err, data) {
+			if (!err) res.json(data);
+			else next();
+		});
 	}
 }
 
@@ -130,45 +140,39 @@ function sortList(method, list, cb) {
 
 /*
 * Extract media links and embed directly into layout
-* @list of favorites to parse
+* @item an object containing favorite id and url to parse
 */
-function embedMedia(list, cb) {
-	var newlist = [];
-	async.forEach(list, checkEmbed, function(err) {
-		if (!err) return cb(null, newlist);
-		else return cb(null, list);
-	});
-
-	function checkEmbed(v, cback) {
-		var host = url.parse(v.entities.urls[0].expanded_url).host,
-				o = {
-					url: v.entities.urls[0].expanded_url,
-					width: 435,
-					height: 244
-				},
-				u = config.vimeo.oembed_url + '?' + qs.stringify(o);
-		switch (host) {
-			case 'vimeo.com':
-				r.get({url: u, json: true}, function(err, resp, body) {
-					if (!err && resp.statusCode === 200) {
-						v.entities.urls.embeded_url = body.html;
-						newlist.push(v);
-						return cback();
-					} else return cback(err);
-				});
-				break;
-			default: 
-				newlist.push(v);
-				return cback();
-		}
+function getEmbededMedia(item, cb) {
+	var oembed,
+		u = '',
+		host = url.parse(item.url).host,
+			o = {
+				url: item.url,
+				width: 435,
+				height: 244
+			};
+	
+	if (host.match(/vimeo.com/ig)) {
+		u = config.vimeo.oembed_url + '?' + qs.stringify(o);
+	} else if (host.match(/youtube.com|youtu.be/ig)) {
+		o.format = 'json';
+		u = config.youtube.oembed_url + '?' + qs.stringify(o);
 	}
+	else return cb(null, {});
+	
+	r.get({url: u, json: true}, function(err, resp, body) {
+		if (!err && resp.statusCode === 200) {
+			return cb(null, body);
+		} else return cb(err);
+	});
 }
 
 function render(list, cb) {
 	var newlist = list.map(function(v, i) {
+		var t = v.text.slice(0, v.entities.urls[0].indices[0]);
 		return {
-			text: v.text,
-			urls: v.entities.urls,
+			text: t,
+			urls: v.entities.urls[0],
 			user : {
 				id: v.user.id,
 				pic: v.user.profile_image_url,

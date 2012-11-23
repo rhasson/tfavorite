@@ -156,3 +156,7 @@ h3 {
 .text {
 	text-align: center;
 }
+.extended-media {
+	width: 400px;
+	height: 200px;
+}

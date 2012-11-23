@@ -28,6 +28,43 @@ $(document).ready(function() {
 
 });
 
+var FaviousApp = angular.module('FaviousApp', ['ngSanitize']);
+
+FaviousApp.directive('favItem', function($http, $filter) {
+	var linkFn = function(scope, element, attr) {
+		//setup event handler
+		var root_el = $(element[0]),
+			media_el = $(root_el).find('div.extended-media'),
+			flag = false;
+
+		$(root_el).on('click', function(evt) {
+			if (!flag) {
+				var resp = $http({
+						method: 'GET',
+						url: '/embed/' + scope.item.fav_id,
+						params: { url: scope.item.urls.expanded_url }
+					});
+				resp.success(function(data, status) {
+					scope.embeded_data = data.html;
+					flag = true;
+				});
+				resp.error(function(data, status) {
+					console.log('Failed to get details for this tweet');
+					flag = false;
+				});
+			} 
+			$(media_el).slideToggle('fast');
+		});
+		//do dirty check to update Angular
+		//scope.$digest();
+	}
+
+	return {
+		restrict: 'A',
+		link: linkFn
+	}
+});
+
 function favListCtrl($scope, $http) {
 	var resp = $http({
 			method: 'GET',
@@ -45,4 +82,8 @@ function favListCtrl($scope, $http) {
 	resp.error(function(data, status) {
 		console.error('Failed to get favorites from server: ', data);
 	});
+
+	$scope.getDetails = function(item, $event) {
+
+	}
 }
