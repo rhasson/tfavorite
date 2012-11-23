@@ -45,7 +45,8 @@ FaviousApp.directive('favItem', function($http, $filter) {
 						params: { url: scope.item.urls.expanded_url }
 					});
 				resp.success(function(data, status) {
-					scope.embeded_data = data.html;
+					$(media_el).css('height', data.height);
+					scope.embeded_data = data;
 					flag = true;
 				});
 				resp.error(function(data, status) {

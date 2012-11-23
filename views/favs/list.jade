@@ -11,4 +11,7 @@ div.list
           {{item.text}}
           a.fav_link(ng-href='{{item.urls.url}}', target='_blank') {{item.urls.display_url}}
       div.extended-media.well.row-fluid.hide
-          div.embeded(ng-bind-html-unsafe='embeded_data')
+        div.embeded(ng-bind-html-unsafe='embeded_data.html')
+      div.actions.row-fluid.pull-right
+        div.span1.pull-right: a(href='#', ng-click='removeFav(item, event)') Remove
+        div.span1.pull-right: a(href='#', ng-click='shareFav(item, event)') Share
