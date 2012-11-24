@@ -34,10 +34,12 @@ FaviousApp.directive('favItem', function($http, $filter) {
 	var linkFn = function(scope, element, attr) {
 		//setup event handler
 		var root_el = $(element[0]),
+			click_el = $(root_el).find('div.text_data'),
 			media_el = $(root_el).find('div.extended-media'),
+			embed_el = $(root_el).find('div.embeded'),
 			flag = false;
 
-		$(root_el).on('click', function(evt) {
+		$(click_el).on('click', function(evt) {
 			if (!flag) {
 				var resp = $http({
 						method: 'GET',
@@ -45,7 +47,7 @@ FaviousApp.directive('favItem', function($http, $filter) {
 						params: { url: scope.item.urls.expanded_url }
 					});
 				resp.success(function(data, status) {
-					//$(media_el).css('height', data.height + 25);
+					$(embed_el).css('width', data.width);
 					scope.embeded_data = data;
 					flag = true;
 				});
