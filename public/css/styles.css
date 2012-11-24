@@ -170,7 +170,12 @@ h3 {
 .media_desc {
 	text-align: center;
 }
-
+.welcome {
+	margin-top: 10%;
+	padding-bottom: 10px;
+	text-align: center;
+	background: url(/img/divide-lg.png) bottom center no-repeat;
+}
 iframe {
   padding: 4px;
   background-color: #fff;
