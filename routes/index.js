@@ -6,25 +6,12 @@
 var r = require('request'),
 		qs = require('querystring'),
 		config = require('../config').config,
-		url = require('url'),
-		async = require('async');
+		url = require('url');
 
 exports.routes = {
 	index: function(req, res, next) {
 		if (req.session && req.session.access_token) res.render('favs', {user: req.session.access_token.screen_name});
 		else res.render('home', {user: ''});
-/*		
-		async.waterfall([
-			function(cb) { getFavorites(req, 10, cb); },
-			function(obj, cb) { sortList('ascend', obj, cb); },
-			function(sortedlist, cb) { render(sortedlist, cb); }
-			//function(sortedlist, cb) { embedMedia(sortedlist, cb); }
-			//function(embededlist, cb) { render(embededlist, cb); }
-		], function(err, list) {
-			if (!err) res.render('favs', {user: req.session.access_token.screen_name, favs: list});
-			else res.render('home', {user: ''});
-		});
-*/
 	},
 	auth_cb: function(req, res, next) {
 				var v = qs.parse(url.parse(req.url).query);
