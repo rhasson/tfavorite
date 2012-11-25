@@ -144,6 +144,8 @@ function getEmbededMedia(item, cb) {
 	} else if (host.match(/youtube.com|youtu.be/ig)) {
 		o.format = 'json';
 		u = config.youtube.oembed_url + '?' + qs.stringify(o);
+	} else if (host.match(/instagr.am|instagram/)) {
+		u = config.instagram.oembed_url + '?' + qs.stringify(o);
 	}
 	else return cb(null, {});
 	

@@ -42,10 +42,9 @@ FaviousApp.directive('favItem', function($http, $filter) {
 		$(click_el).on('click', function(evt) {
 			if (scope.item.urls.expanded_url.indexOf('instagr.am') !== -1) {
 				scope.embeded_data = { url: scope.item.urls.expanded_url + '/media/?size=m' };
-				if (!$(embed_el).children('img').hasClass('instagram_img')) {
-					$(embed_el).append('<img src="'+scope.embeded_data.url+'" class="img-polaroid instagram_img">');
+				if (!$(embed_el).children('img').length) {
+					$(embed_el).append('<img src="'+scope.embeded_data.url+'" class="img-polaroid">');
 					$(embed_el).children('img').on('load', function() {
-						console.log('image loaded')
 						$(embed_el).css('width', $(this).width());
 						$(embed_el).children('img').off('load');
 					});
