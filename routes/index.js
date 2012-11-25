@@ -135,8 +135,8 @@ function getEmbededMedia(item, cb) {
 		host = url.parse(item.url).host,
 			o = {
 				url: item.url,
-				width: 435,
-				height: 244
+				maxwidth: 400//435,
+				//maxheight: 244
 			};
 	
 	if (host.match(/vimeo.com/ig)) {

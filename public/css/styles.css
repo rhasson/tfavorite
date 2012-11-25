@@ -152,6 +152,7 @@ h3 {
 	padding: 2px 4px;
 	white-space: nowrap;
 	vertical-align: baseline;
+	color: #857C77;
 }
 .text {
 	text-align: center;
@@ -169,6 +170,9 @@ h3 {
 }
 .media_desc {
 	text-align: center;
+}
+.text_data {
+	color: #22262F;
 }
 .welcome {
 	margin-top: 10%;
