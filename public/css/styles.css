@@ -108,6 +108,7 @@ h3 {
 	/*background: #eee;*/
 	padding: 20px 40px;
 	width: 100%;
+	margin-top: 40px;
 
 	-webkit-overflow-scrolling: touch;
 
@@ -178,8 +179,10 @@ h3 {
 	text-align: center;
 	background: url(/img/divide-lg.png) bottom center no-repeat;
 }
-.list {
-	margin-top: 5%;
+.search_box,
+.loading {
+	margin: 0 auto;
+	width: 50%;
 }
 
 iframe {

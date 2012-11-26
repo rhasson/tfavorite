@@ -1,8 +1,11 @@
 extends ../layout
 
 block content
-  div.container
-    div.row-fluid.favcontents(ng-controller='favListCtrl')
+  div.container(ng-controller='favListCtrl')
+    div.row-fluid.favcontents
+      div.search_box
+        form.form-search(name='search_form')
+          input.search-query(type='search', name='searchTerm', ng-model='query', placeholder='Search')
       div.loading: h3 Loading...
       include list
 
