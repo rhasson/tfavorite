@@ -1,16 +1,16 @@
 $(document).ready(function() {
-	if (Meny) {
+	/*if (Meny) {
 		var meny = Meny.create({
 			menuElement: document.querySelector('.meny'),
 			contentsElement: document.querySelector('.favcontents'),
-			position: 'left',
+			position: 'top',
 			height: 200,
 			width: 260,
 			threshold: 40
 		});
-	}
+	}*/
 
-	$('.list').freetile({
+/*	$('.list').freetile({
 		selector: '.el_item'
 	});
 
@@ -25,7 +25,7 @@ $(document).ready(function() {
 	}
 	
 	$('.favcontents').innerHeight(viewport().height);
-
+*/
 });
 
 var FaviousApp = angular.module('FaviousApp', ['ngSanitize']);

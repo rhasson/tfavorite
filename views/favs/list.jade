@@ -1,5 +1,5 @@
-div.list
-  div.el_item.span10(fav-item, ng-repeat='item in list')
+div.list.span10
+  article.el_item(fav-item, ng-repeat='item in list')
     div.profile_pic.media
       a.pull-left(href='#')
         img.img-polaroid.img-rounded.media-object(ng-src='{{item.user.pic}}')

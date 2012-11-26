@@ -1,18 +1,11 @@
 extends ../layout
 
 block content
-  div.content
-    div.meny
-      include categories
-    div.meny-arrow
-    div.favcontents(ng-controller='favListCtrl')
-      div.container
-        div.loading h3 Loading...
-        block fav_items
-          div(style='margin-top: 5%')
-            include list
+  div.container
+    div.row-fluid.favcontents(ng-controller='favListCtrl')
+      div.loading: h3 Loading...
+      include list
 
 block append scripts
   script(src='js/meny.min.js')
   script(src='js/controller.js')
-  script(src='js/jquery.freetile.min.js')
