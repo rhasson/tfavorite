@@ -5,12 +5,20 @@
 
 var r = require('request'),
 		qs = require('querystring'),
+		crypto = require('crypto'),
 		config = require('../config').config,
-		url = require('url');
+		url = require('url'),
+		util = require('util'),
+		cache = {};
 
+/*
+*  Basic HTTP routes handled by Express
+*/
 exports.routes = {
 	index: function(req, res, next) {
-		if (req.session && req.session.access_token) res.render('favs', {user: req.session.access_token.screen_name});
+		if (req.session && req.session.access_token) res.render('favs', 
+			{user: req.session.access_token.screen_name,
+			 id: req.session.access_token.user_id});
 		else res.render('home', {user: ''});
 	},
 	auth_cb: function(req, res, next) {
@@ -43,6 +51,7 @@ exports.routes = {
 							r.get({url: u, oauth: req.session.oauth, json: true}, function(err2, resp2, user) {
 								if (!err2 && resp2.statusCode === 200) {
 									req.session.user = user;
+									cache[req.session.access_token.user_id.toString()] = req.session;
 									res.redirect('/');
 								}
 							});
@@ -69,8 +78,13 @@ exports.routes = {
 			} else console.log(body);
 		});
 	},
+	logout: function(req, res, next) {
+		cach[req.session.access_token.user_id] = null;
+		req.session = null;
+		res.redirect('/');
+	},
 	get_favorites: function(req, res, next) {
-		getFavorites(req, req.query.limit, function(err, data){
+		getFavorites(req, req.query, function(err, data){
 			if (!err) {
 				render(data, function(err, list) {
 					res.json(list);
@@ -90,26 +104,105 @@ exports.routes = {
 	}
 }
 
-function getFavorites(req, count, cb) {
-	var name, u, params;
-	if (typeof count === 'function') {
-		cb = count;
-		count = 10;
+/*
+*  WebSockets command parsing and routing
+*/
+exports.wsroutes = {
+	parse: function(msg, socket) {
+		var data, resp, sess, id;
+		
+		try { data = JSON.parse(msg); }
+		catch (e) { console.log(e); }
+		
+		switch (data.action) {
+			case 'init':
+				sess = cache[data.id];  //get session given the user id
+				if (sess) {
+					crypto.randomBytes(128, function(e, b){
+						if (!e) {
+							resp = {
+								status: 'ok',
+								data: {	token: b.toString('base64') }
+							};
+							cache[resp.data.token] = data.id;  //save the ws session id with the user id
+							//sockets[resp.data.token] = socket;
+						} else {
+							resp = {
+								status: 'error',
+								error: 'failed to create session token'
+							}
+						}
+						return socket.write(JSON.stringify(resp));
+					});
+				}
+				break;
+			case 'get_favorites':
+				if (data.token) {
+					id = cache[data.token];
+					if (id) {
+						sess = cache[id];
+						getFavorites(sess, data.params, function(err, resp) {
+							if (!err) {
+								render(resp, function(err, list) {
+									socket.write(JSON.stringify({
+										status: 'ok',
+										token: data.token,
+										data: list
+									}));
+								});
+							}
+						});
+					}
+				}
+				break;
+			case 'get_embed':
+				if (data.token) {
+					id = cache[data.token];
+					if (id) {
+						sess = cache[id];
+						getEmbededMedia(data.params, function(err, resp) {
+							if (!err) {
+								socket.write(JSON.stringify({
+									status: 'ok',
+									token: data.token,
+									data: resp
+								}));
+							}
+						});
+					}
+				}
+		}
 	}
-	if (req.session.access_token) {
-		name = req.session.access_token.screen_name;
+}
+
+/*
+*  Helper functions
+*/
+
+function getFavorites(req, params, cb) {
+	var name, u, x;
+	var sess = req.session || req;
+
+	if (typeof params === 'function') {
+		cb = params;
+		params = { count: 10 };
+	}
+
+	if (sess) {
+		name = sess.access_token.screen_name;
 		u = config.twitter.base_url + '/1.1/favorites/list.json?';
-		u += qs.stringify({
-			user_id: req.session.access_token.user_id,
-			count: count,
+		x = {
+			user_id: sess.access_token.user_id,
 			include_entities: true
-		});
-		r.get({url: u, oauth: req.session.oauth, json: true}, function(err, resp, body) {
+		};
+		util._extend(x, params);
+		u += qs.stringify(x);
+		r.get({url: u, oauth: sess.oauth, json: true}, function(err, resp, body) {
 			if (!err && resp.statusCode === 200) {
 				return cb(null, body);
 			} else return cb(err);
 		});
-	} else return cb(true);
+	} else return cb(false);
 }
 
 /*

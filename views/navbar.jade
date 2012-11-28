@@ -8,7 +8,7 @@ div.navbar.navbar-fixed-top
             a.tlogin(href='/tlogin')
               img.twitter_login_img(src='/img/sign-in-with-twitter-gray.png')
           else
-            a.dropdown-toggle(data-toggle='dropdown', data-target='#') #{user}
+            a.dropdown-toggle.user(data-user-id='#{id}', data-user-name='#{user}', data-toggle='dropdown', data-target='#') #{user}
               b.caret
             ul.dropdown-menu
               li: a.logout(href='/logout') Logout

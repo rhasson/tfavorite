@@ -28,16 +28,17 @@ $(document).ready(function() {
 */
 });
 
-var FaviousApp = angular.module('FaviousApp', ['ngSanitize']);
+var FaviousApp = angular.module('FaviousApp', ['FaviousApp.service','ngSanitize']);
 
-FaviousApp.directive('favItem', function($http, $filter) {
+FaviousApp.directive('favItem', function(socket, $http, $filter) {
 	var linkFn = function(scope, element, attr) {
 		//setup event handler
 		var root_el = $(element[0]),
 			click_el = $(root_el).find('div.text_data'),
 			media_el = $(root_el).find('div.extended-media'),
 			embed_el = $(root_el).find('div.embeded'),
-			flag = false;
+			flag = false,
+			ps;
 
 		$(click_el).on('click', function(evt) {
 			if (scope.item.urls.expanded_url.indexOf('instagr.am') !== -1) {
@@ -52,6 +53,27 @@ FaviousApp.directive('favItem', function($http, $filter) {
 			}
 
 			if (!flag) {
+				if (socket.hasToken()) {
+					ps = socket.get({
+						action: 'get_embed',
+						params: {
+							id: scope.item.fav_id,
+							url: scope.item.urls.expanded_url
+						}
+					});
+					ps.then(function(resp) {
+						if (resp.status == 'ok') {
+							$(embed_el).css('width', resp.data.width);
+							scope.embeded_data = resp.data;
+							flag = true;
+						}
+					},
+					function(err) {
+						console.log('Failed to get details for this tweet');
+						flag = false;
+					});
+				}
+/*				
 				var resp = $http({
 						method: 'GET',
 						url: '/embed/' + scope.item.fav_id,
@@ -66,6 +88,7 @@ FaviousApp.directive('favItem', function($http, $filter) {
 					console.log('Failed to get details for this tweet');
 					flag = false;
 				});
+*/				
 			} 
 			$(media_el).slideToggle('fast');
 		});
@@ -79,25 +102,34 @@ FaviousApp.directive('favItem', function($http, $filter) {
 	}
 });
 
-function favListCtrl($scope, $http) {
-	var resp = $http({
-			method: 'GET',
-			url: '/favs',
-			params: {limit: 20}
-	});
-	resp.success(function(data, status) {
-		if (status === 200 && data) {
-			$scope.list = data;
-			$('div.loading').remove()
-		} else {
-			$scope.list = [];
+function favListCtrl($scope, socket) {
+	socket.onopen = function() {
+		var pi, ps;
+		var id = $('.user').attr('data-user-id');
+
+		if (!socket.hasToken()) {
+			pi = socket.init(id);
+			pi.then(function(id) {
+				ps = socket.get({
+					action: 'get_favorites',
+					params: {
+						count: 20
+					}
+				});
+				ps.then(function(list) {
+					if (list.status == 'ok') {
+						$scope.list = list.data
+						$('div.loading').remove();
+					}
+				},
+				function(err) {
+					console.log('get favorites error: ', err);
+					$scope.list = [];
+				});
+			},
+			function(err) {
+				console.log('error: ', err);
+			});
 		}
-	});
-	resp.error(function(data, status) {
-		console.error('Failed to get favorites from server: ', data);
-	});
-
-	$scope.getDetails = function(item, $event) {
-
 	}
 }
