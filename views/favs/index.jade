@@ -2,12 +2,14 @@ extends ../layout
 
 block content
   div.container(ng-controller='favListCtrl')
-    div.row-fluid.favcontents
-      div.search_box
+    div.row
+      div.span12.search_box
         form.form-search(name='search_form')
           input.search-query(type='search', name='searchTerm', ng-model='query', placeholder='Search')
-      div.loading: h3 Loading...
-      include list
+    div.row
+      div.span12
+        div.loading: h3 Loading...
+        include list
 
 block append scripts
   script(src='js/meny.min.js')

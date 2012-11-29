@@ -1,7 +1,7 @@
 html, 
 body {
 	height: 100%;
-	overflow: scroll;
+	overflow: auto;
 	font-family: "Proxima Nova Regular","Helvetica Neue",Arial,Helvetica,sans-serif;
 	background: white url(/img/bg.gif) repeat top center;
 }
@@ -24,6 +24,12 @@ h2,
 h3 {
 	margin-top: 20px;
 	font-size: 24px;
+}
+.navbar-fixed-top {
+	margin-bottom: 20px;
+}
+.navbar-fixed-top, .navbar-fixed-bottom {
+	position: static;
 }
 .meny {
 	display: none;
@@ -181,8 +187,7 @@ h3 {
 }
 .search_box,
 .loading {
-	margin: 0 auto;
-	width: 50%;
+	text-align: center
 }
 
 iframe {
