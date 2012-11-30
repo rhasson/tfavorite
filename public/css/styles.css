@@ -1,7 +1,27 @@
+@media (max-width: 480px) {
+	.media .pull-left, .media .pull-right {
+  		float: left !important; /* none */
+	}
+	h6 {
+		font-size: 9px; /* 11.9px */
+	}
+	h5 {
+		font-size: 12px; /* 14px */
+	}
+	.profile_header_label {
+		padding: 2px 2px !important;
+	}
+	.actionlinks h6 {
+		font-size: 12px !important;
+	}
+	.media_label {
+		white-space: normal !important;
+	}
+}
+
 html, 
 body {
 	height: 100%;
-	overflow: auto;
 	font-family: "Proxima Nova Regular","Helvetica Neue",Arial,Helvetica,sans-serif;
 	background: white url(/img/bg.gif) repeat top center;
 }
@@ -159,6 +179,13 @@ h3 {
 	vertical-align: baseline;
 	color: #857C77;
 }
+.media_label {
+	display: inline-block;
+	padding: 2px 4px;
+	white-space: nowrap;
+	vertical-align: baseline;
+	color: #857C77;
+}
 .text {
 	text-align: center;
 }
@@ -188,6 +215,18 @@ h3 {
 .search_box,
 .loading {
 	text-align: center
+}
+
+.actionlinks {
+	display: inline-block;
+	padding: 2px 4px;
+	white-space: nowrap;
+	vertical-align: baseline;
+}
+.actionlinks_container {
+	height: 18px;
+	padding-top: 2px;
+	padding-bottom: 5px;
 }
 
 iframe {

@@ -228,7 +228,7 @@ function getEmbededMedia(item, cb) {
 		host = url.parse(item.url).host,
 			o = {
 				url: item.url,
-				maxwidth: 400//435,
+				maxwidth: item.maxwidth//435,
 				//maxheight: 244
 			};
 	

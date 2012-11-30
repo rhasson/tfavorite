@@ -58,7 +58,8 @@ FaviousApp.directive('favItem', function(socket, $http, $filter) {
 						action: 'get_embed',
 						params: {
 							id: scope.item.fav_id,
-							url: scope.item.urls.expanded_url
+							url: scope.item.urls.expanded_url,
+							maxwidth: $(click_el).width() - 10
 						}
 					});
 					ps.then(function(resp) {
