@@ -6,17 +6,16 @@ div.list
       div.profile_header.media-body
         span.profile_header_label: h5 @{{item.user.screen_name}}
         span.profile_header_label: h6 ({{item.user.name}})
-    div.text_data.row
-      span.span10
-        {{item.text}}
-        a.fav_link(ng-href='{{item.urls.url}}', target='_blank') {{item.urls.display_url}}
-      div.extended-media.row.hide
+    div.text_data.media
+      div
+        div {{item.text}}
+          a.fav_link(ng-href='{{item.urls.url}}', target='_blank') {{item.urls.display_url}}
+      div.extended-media.hide
         div.embeded(ng-bind-html-unsafe='embeded_data.html')
         div.media_desc
           span.media_label
             h5 {{embeded_data.title}}
             a(href='{{embeded_data.author_url}}', target='_blank'): h6 {{embeded_data.author_name}}
-          span.date_label 
     div.actions.row
       div.actionlinks_container.pull-right
         a.actionlinks(href='#', ng-click='removeFav(item, event)'): h6 Remove

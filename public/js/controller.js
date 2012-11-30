@@ -64,7 +64,7 @@ FaviousApp.directive('favItem', function(socket, $http, $filter) {
 					});
 					ps.then(function(resp) {
 						if (resp.status == 'ok') {
-							$(embed_el).css('width', resp.data.width);
+							$(embed_el).css('width', resp.data.width+10);
 							scope.embeded_data = resp.data;
 							flag = true;
 						}
