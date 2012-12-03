@@ -10,7 +10,7 @@ div.list
       div
         div {{item.text}}
           a.fav_link(ng-href='{{item.urls.url}}', target='_blank') {{item.urls.display_url}}
-      div.extended-media.hide
+      div.extended-media.hide.embeded_closed
         div.embeded(ng-bind-html-unsafe='embeded_data.html')
         div.media_desc
           span.media_label

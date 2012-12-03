@@ -3,6 +3,12 @@ angular.module('FaviousApp.service', []).
 		var sock = new SockJS('http://favio.us/ws');
 		var old_send = sock.send;
 		
+		/*
+		* sends request object to server
+		*  @data.action: string action to be performed such as 'init', 'get_favorites'
+		*  @data.params: object representing parameters
+		*  @data.token: session token (will not be present with 'init' message)
+		*/
 		sock.__proto__.send = function(data, cb) {
 			var d;
 

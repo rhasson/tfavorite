@@ -73,25 +73,11 @@ FaviousApp.directive('favItem', function(socket, $http, $filter) {
 						console.log('Failed to get details for this tweet');
 						flag = false;
 					});
-				}
-/*				
-				var resp = $http({
-						method: 'GET',
-						url: '/embed/' + scope.item.fav_id,
-						params: { url: scope.item.urls.expanded_url }
-					});
-				resp.success(function(data, status) {
-					$(embed_el).css('width', data.width);
-					scope.embeded_data = data;
-					flag = true;
-				});
-				resp.error(function(data, status) {
-					console.log('Failed to get details for this tweet');
-					flag = false;
-				});
-*/				
+				}			
 			} 
-			$(media_el).slideToggle('fast');
+			//$(media_el).slideToggle('fast');
+			//$(media_el).toggleClass('hide');
+			slide(media_el);
 		});
 		//do dirty check to update Angular
 		//scope.$digest();
@@ -132,5 +118,38 @@ function favListCtrl($scope, socket) {
 				console.log('error: ', err);
 			});
 		}
+	}
+
+	$scope.removeFav = function(item, evt) {
+		console.log('removing: ', item)
+		var newlist = [];
+		if (item) {
+			if (socket.hasToken()) {
+				var ps = socket.get({
+					action: 'remove_favorite',
+					params: { id: item.fav_id }
+				});
+				ps.then(function(resp) {
+					for(var i=0; i < $scope.list.length; i++) {
+						if ($scope.list[i].fav_id === item.fav_id) $scope.list.splice(i, 1);
+					}
+				},
+				function(err) {
+					console.log('error removing favorite: ', err);
+				})
+			}
+		}
+	}
+}
+
+function slide (el) {
+	if ($(el).hasClass('embeded_opened')) {
+		$(el).removeClass('embeded_opened');
+		$(el).addClass('embeded_closed');
+		$(el).addClass('hide');
+	} else {	
+		$(el).removeClass('hide');
+		$(el).removeClass('embeded_closed');
+		$(el).addClass('embeded_opened');
 	}
 }

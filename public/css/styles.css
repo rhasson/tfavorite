@@ -200,6 +200,20 @@ h3 {
 	margin: 0 auto;
 	padding-top: 10px;
 }
+.embeded_closed {
+	opacity: 0;
+	-webkit-transition: opacity 1s ease-in-out;
+	-moz-transition: opacity 1s ease-in-out;
+	-o-transition: opacity 1s ease-in-out;
+	transition: opacity 1s ease-in-out;
+}
+.embeded_opened {
+	opacity: 1;
+	-webkit-transition: opacity 1s ease-in-out;
+	-moz-transition: opacity 1s ease-in-out;
+	-o-transition: opacity 1s ease-in-out;
+	transition: opacity 1s ease-in-out;
+}
 .media_desc {
 	text-align: center;
 }
@@ -228,7 +242,10 @@ h3 {
 	padding-top: 2px;
 	padding-bottom: 5px;
 }
-
+.media-object {
+	width: 48px;
+	height: 48px;
+}
 iframe {
   padding: 4px;
   background-color: #fff;

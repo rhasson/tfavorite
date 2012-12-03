@@ -101,6 +101,15 @@ exports.routes = {
 			if (!err) res.json(data);
 			else next();
 		});
+	},
+	remove: function(req, res, next) {
+		removeFavorite(req, req.params.id, function(err, resp) {
+			if (!err) {
+				res.json(resp);
+			} else {
+				res.json({Error: 'failed to remove favorite', id: req.params.id});
+			}
+		});
 	}
 }
 
@@ -109,7 +118,7 @@ exports.routes = {
 */
 exports.wsroutes = {
 	parse: function(msg, socket) {
-		var data, resp, sess, id;
+		var data, resp, sess, id, resp_msg = {};
 		
 		try { data = JSON.parse(msg); }
 		catch (e) { console.log(e); }
@@ -141,15 +150,18 @@ exports.wsroutes = {
 					id = cache[data.token];
 					if (id) {
 						sess = cache[id];
+						resp_msg.token = data.token;
 						getFavorites(sess, data.params, function(err, resp) {
 							if (!err) {
-								render(resp, function(err, list) {
-									socket.write(JSON.stringify({
-										status: 'ok',
-										token: data.token,
-										data: list
-									}));
+								resp_msg.status = 'ok';
+								render(resp, function(err2, list) {
+									resp_msg.data = list;
+									socket.write(JSON.stringify(resp_msg));
 								});
+							} else {
+								resp_msg.status = 'error';
+								resp_msg.error = err;
+								socket.write(JSON.stringify(resp_msg));
 							}
 						});
 					}
@@ -160,17 +172,39 @@ exports.wsroutes = {
 					id = cache[data.token];
 					if (id) {
 						sess = cache[id];
+						resp_msg.token = data.token;
 						getEmbededMedia(data.params, function(err, resp) {
 							if (!err) {
-								socket.write(JSON.stringify({
-									status: 'ok',
-									token: data.token,
-									data: resp
-								}));
+								resp_msg.status = 'ok';
+								resp_msg.data = resp;
+							} else {
+								resp_msg.status = 'error';
+								resp_msg.error = err;
 							}
+							socket.write(JSON.stringify(resp_msg));
 						});
 					}
 				}
+				break;
+			case 'remove_favorite':
+				if (data.token) {
+					id = cache[data.token]
+					if (id) {
+						sess = cache[id];
+						resp_msg.token = data.token;
+						removeFavorites(sess, data.params.id, function(err, resp) {
+							if (!err) {
+								resp_msg.status = 'ok';
+								resp_msg.data = resp;
+							} else {
+								resp_msg.status = 'error';
+								resp_msg.error = err;
+							}
+							socket.write(JSON.stringify(resp_msg));
+						});
+					}
+				}
+				break;
 		}
 	}
 }
@@ -200,9 +234,40 @@ function getFavorites(req, params, cb) {
 		r.get({url: u, oauth: sess.oauth, json: true}, function(err, resp, body) {
 			if (!err && resp.statusCode === 200) {
 				return cb(null, body);
-			} else return cb(err);
+			} else {
+				if (err) return cb(err);
+				else return cb(new Error(body.errors[0].message));
+			}
 		});
 	} else return cb(false);
+}
+
+/*
+*  Remove a favorite given it's id
+*  @req: session object
+*  @id: favorite id from Twitter
+*/
+function removeFavorites(req, id, cb) {
+	var u;
+	var sess = req.session || req;
+
+	if (typeof id === 'fuction') {
+		cd = id;
+		return cb(new Error('missing id'));
+	}
+	if (sess) {
+		u = config.twitter.base_url + '/1.1/favorites/destroy.json?';
+		r.post({url: u, oauth: sess.oauth, form: {id: id}, json: true}, function(err, resp, body) {
+			console.log(err, resp.request.body, body);
+
+			if (!err && resp.statusCode === 200) {
+				return cb(null, body);
+			} else {
+				if (err) return cb(err);
+				else return cb(new Error(body.errors[0].message));
+			}
+		});
+	}
 }
 
 /*

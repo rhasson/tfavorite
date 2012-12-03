@@ -50,6 +50,7 @@ server.get('/tlogin', routes.twitter_login);
 server.get('/logout', routes.logout);
 server.get('/auth_cb', routes.auth_cb);
 server.get('/favs', routes.get_favorites);
+server.get('/remove/:id', routes.remove)
 server.get('/embed/:id', routes.get_embed);
 
 ws.installHandlers(ws_server, {prefix: '/ws'});
