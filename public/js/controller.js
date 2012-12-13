@@ -41,8 +41,9 @@ FaviousApp.directive('favItem', function(socket, $http, $filter) {
 			ps;
 
 		$(click_el).on('click', function(evt) {
-			if (scope.item.urls.expanded_url.indexOf('instagr.am') !== -1) {
-				scope.embeded_data = { url: scope.item.urls.expanded_url + '/media/?size=m' };
+			var urls = scope.item.entities.urls;
+			if (urls.expanded_url.indexOf('instagr.am') !== -1) {
+				scope.embeded_data = { url: urls.expanded_url + '/media/?size=m' };
 				if (!$(embed_el).children('img').length) {
 					$(embed_el).append('<img src="'+scope.embeded_data.url+'" class="img-polaroid">');
 					$(embed_el).children('img').on('load', function() {
@@ -58,7 +59,7 @@ FaviousApp.directive('favItem', function(socket, $http, $filter) {
 						action: 'get_embed',
 						params: {
 							id: scope.item.fav_id,
-							url: scope.item.urls.expanded_url,
+							url: urls.expanded_url,
 							maxwidth: $(click_el).width() - 10
 						}
 					});
@@ -88,6 +89,31 @@ FaviousApp.directive('favItem', function(socket, $http, $filter) {
 		link: linkFn
 	}
 });
+
+
+FaviousApp.directive('favBody', function(socket, $filter) {
+
+	var linkFn = function(scope, element, attr) {
+		var urls = scope.item.entities.urls;
+		var ex, u;
+
+		if (urls.length == 0) scope.item.text = $filter('linky')(scope.item.text);
+		//replace t.co urls with display urls
+		for (var i=0; i < urls.length; i++) {
+			ex = new RegExp(urls[i].url);
+			u = '<a ng-href="'+urls[i].url+'" class="fav_link" target="_blank">'+urls[i].display_url+'</a>';
+			scope.item.text = scope.item.text.replace(ex, u);
+		}
+
+		element.append(scope.item.text);
+	}
+
+	return {
+		restrict: 'A',
+		link: linkFn
+	}
+});
+
 
 function favListCtrl($scope, socket) {
 	socket.onopen = function() {

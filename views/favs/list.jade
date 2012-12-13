@@ -8,7 +8,7 @@ div.list
         span.profile_header_label: h6 ({{item.user.name}})
     div.text_data.media
       div
-        div {{item.text}}
+        div.text_body(fav-body)
           a.fav_link(ng-href='{{item.urls.url}}', target='_blank') {{item.urls.display_url}}
       div.extended-media.hide.embeded_closed
         div.embeded(ng-bind-html-unsafe='embeded_data.html')

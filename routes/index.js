@@ -320,10 +320,10 @@ function getEmbededMedia(item, cb) {
 
 function render(list, cb) {
 	var newlist = list.map(function(v, i) {
-		var t = v.text.slice(0, v.entities.urls[0].indices[0]);
+		//var t = v.text.slice(0, v.entities.urls[0].indices[0]);
 		return {
-			text: t,
-			urls: v.entities.urls[0],
+			text: v.text,
+			entities: v.entities,
 			user : {
 				id: v.user.id,
 				pic: v.user.profile_image_url,

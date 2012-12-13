@@ -12,7 +12,7 @@ var Express = require('express'),
     ws = sockjs.createServer({ sockjs_url: 'http://favio.us/js/sockjs-0.3.4.min.js',
         jsessionid: true }),
     ws_server = http.createServer(server);
-		//RedisStore = require('connect-redis')(Express);
+		RedisStore = require('connect-redis')(Express);
 
 /* Server Configuration */
 server.configure(function(){
@@ -21,7 +21,7 @@ server.configure(function(){
   server.set('view engine', 'jade');
   server.use(Express.bodyParser());
   server.use(Express.cookieParser());
-  server.use(Express.session({ key: 'jsessionid', secret: 'testing this stuff' }));//, store: new RedisStore}));
+  server.use(Express.session({ key: 'jsessionid', secret: 'testing this stuff', store: new RedisStore}));
   server.use(Express.methodOverride());
   server.use(server.router);
   server.use(Express.static(__dirname + '/public'));
