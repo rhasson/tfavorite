@@ -9,6 +9,8 @@ var r = require('request'),
 		config = require('../config').config,
 		url = require('url'),
 		util = require('util'),
+		redis = require('redis'),
+		rclient = redis.createClient(),
 		cache = {};
 
 /*
@@ -23,6 +25,7 @@ exports.routes = {
 	},
 	auth_cb: function(req, res, next) {
 				var v = qs.parse(url.parse(req.url).query);
+				var self = this;
 				if (!v.denied){
 					req.session.access_token.oauth_verifier = v.oauth_verifier;
 					var oauth = {
@@ -52,7 +55,15 @@ exports.routes = {
 								if (!err2 && resp2.statusCode === 200) {
 									req.session.user = user;
 									cache[req.session.access_token.user_id.toString()] = req.session;
-									res.redirect('/');
+									getFavorites(req.session, function(f_err, list) {
+										render(list, function(r_err, favs) {
+											if (!r_err) {
+
+											}
+
+											res.redirect('/');
+										})
+									});
 								}
 							});
 						}
@@ -219,7 +230,7 @@ function getFavorites(req, params, cb) {
 
 	if (typeof params === 'function') {
 		cb = params;
-		params = { count: 10 };
+		params = { count: 20 };
 	}
 
 	if (sess) {
