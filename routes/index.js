@@ -62,7 +62,7 @@ exports.routes = {
 											}
 
 											res.redirect('/');
-										})
+										});
 									});
 								}
 							});
