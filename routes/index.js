@@ -9,6 +9,7 @@ var r = require('request'),
 		config = require('../config').config,
 		url = require('url'),
 		util = require('util'),
+		reds = require('reds'),
 		redis = require('redis'),
 		rclient = redis.createClient(),
 		cache = {};
@@ -36,6 +37,7 @@ exports.routes = {
 								token_secret: req.session.access_token.oauth_token_secret
 							},
 							u = config.twitter.base_url + '/oauth/access_token';
+					/* get access token from twitter oauth service */
 					r.post({url: u, oauth: oauth}, function(err, resp, body) {
 						if (!err && resp.statusCode === 200) {
 							req.session.access_token = qs.parse(body);
@@ -45,26 +47,41 @@ exports.routes = {
 								token: req.session.access_token.oauth_token,
 								token_secret: req.session.access_token.oauth_token_secret
 							};
+
+							/* save session object to cache */
+							cache[req.session.access_token.user_id.toString()] = req.session;
 							var u = config.twitter.base_url + '/1.1/users/show.json?',
 									params = {
 										screen_name: req.session.access_token.screen_name,
 										user_id: req.session.access_token.user_id
 									};
 							u += qs.stringify(params);
+							/* get logged in user information and update session object in cache */
 							r.get({url: u, oauth: req.session.oauth, json: true}, function(err2, resp2, user) {
 								if (!err2 && resp2.statusCode === 200) {
 									req.session.user = user;
 									cache[req.session.access_token.user_id.toString()] = req.session;
-									getFavorites(req.session, function(f_err, list) {
-										render(list, function(r_err, favs) {
-											if (!r_err) {
-
-											}
-
-											res.redirect('/');
-										});
-									});
 								}
+							});
+
+							/* get first 20 favorites, index and save them */
+							getFavorites(req.session, function(f_err, list) {
+								/* index important values from favorite object */
+								redsindex(list, req.session.access_token.user_id.toString()); //verify if this is blocking and should be done async
+								/* format favorite object to pull out only relavent info to send client */
+								render(list, function(r_err, favs) {
+									if (!r_err) {
+										/* save favorites into redis */
+										favs.forEach(function(item) {
+											rclient.zadd(
+											  'favorites:'+req.session.access_token.user_id.toString(),
+												item.id_str,
+												JSON.stringify(item)
+											);
+										});
+										res.redirect('/')
+									}
+								});
 							});
 						}
 					});
@@ -92,6 +109,7 @@ exports.routes = {
 	logout: function(req, res, next) {
 		cach[req.session.access_token.user_id] = null;
 		req.session = null;
+		rclient.quit();
 		res.redirect('/');
 	},
 	get_favorites: function(req, res, next) {
@@ -346,5 +364,32 @@ function render(list, cb) {
 			fav_id: v.id_str
 		}
 	});
-	return cb(null, newlist);
+	process.nextTick(return cb(null, newlist));
+}
+
+function redsindex(ary, user_id) {
+	var s = reds.createSearch('searchindex:'+user_id);
+	ary.forEach(function(item, i) {
+		s.index(item.text, item.id_str);
+		s.index(item.user.name, item.id_str);
+		s.index(item.user.screen_name, item.id_str);
+		s.index(item.user.place.full_name, item.id_str);
+		s.index(item.user.place.country, item.id_str);
+		if (item.entities.urls.length) {
+			item.entities.urls.forEach(function(u) {
+				s.index(u.expanded_url, item.id_str);
+			});
+		}
+		if (item.entities.hashtags.length) {
+			items.entities.hashtags.forEach(function(h) {
+				s.index(h.text, item.id_str);
+			});
+		}
+		if (item.entities.user_mentions.length) {
+			items.entities.user_mentions.forEach(function(m) {
+				s.index(m.name, item.id_str);
+				s.index(m.screen_name, item.id_str);
+			});
+		}
+	});
 }

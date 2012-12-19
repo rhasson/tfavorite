@@ -1,6 +1,50 @@
-var r = require('request');
+get token
+get first 20 favorites
+index 20 favorites into a named index (searchindex:user_id)
+  a. entities.urls[].expanded_url
+  b. entities.hashtags[].text
+  c. entities.user_mentions[].screen_name & name
+  d. text
+  e. user.name
+  f. user.screen_name
+  g. user.place.full_name
+  h. user.place.country
+store favtories in redis in a hash
+  a. favorites:user_id favorite-id_str json(favorite_body)
+log user in and redirect
+queue task to get remaining favorites
+  a. check user object for "favourites_count"
+  b. get all favorites, 200 at a time starting from the 21st favorite
+  c. store in redis and couchdb
+  d. update client on progress
+  e. if fetch failed or api limit reach, re-queue the task
 
-r.get({url: 'http://t.co/Wff86tKw'}, function(err, resp, body) {
-	console.log('HOST: ', resp.request.host);
-	console.log('PATH: ', resp.request.path);
-});
+client inits ws connection
+  a. push stored favorites to client
+display favorites on client
+
+
+recursive function for getting favorites:
+function get(user_id, total_count, last_id) {
+	count = (total_count < 200) ? ((total_count > 0) ? total_count : 0) : 200
+  total_count -= count
+
+	u = base_api + '/favorites/list.json?' +
+	qs.stringify({
+		user_id: user_id,
+		count: total_count, //200 is max
+		max_id: last_id
+	})
+
+	r.get({url: u, json: true}, function(err, resp, body) {
+		if (!err && resp.statusCode === 200 && !body.error) {
+			process.send({status: 'data', data: body})
+			last_id = body.pop().id_str //need to get the id of the last item in array
+			if (total_count === 0) process.send({status: 'end'})
+			else get(user_id, total_conut, last_id)
+		} else {
+		  var e = err ? err : body.errors[0].message
+			process.send({status: 'error', error: e})
+		}
+	})
+}
