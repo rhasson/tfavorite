@@ -64,25 +64,44 @@ exports.routes = {
 								}
 							});
 
-							/* get first 20 favorites, index and save them */
-							getFavorites(req.session, function(f_err, list) {
-								/* index important values from favorite object */
-								redsindex(list, req.session.access_token.user_id.toString()); //verify if this is blocking and should be done async
-								/* format favorite object to pull out only relavent info to send client */
-								render(list, function(r_err, favs) {
-									if (!r_err) {
-										/* save favorites into redis */
-										favs.forEach(function(item) {
-											rclient.zadd(
-											  'favorites:'+req.session.access_token.user_id.toString(),
-												item.id_str,
-												JSON.stringify(item)
-											);
-										});
-										res.redirect('/')
+							rclient.zrange([
+								'favorites:'+req.session.access_token.user_id,
+								'-1',
+								'-1',
+								'WITHSCORES'],
+								function(err, ans) {
+									var params = {};
+									if (!err && ans.length > 0) {
+										// already got favorites, check the id and attempt to fetch latest
+										params.max_id = ans //access the favorite_id which is the score value
+									} else if (!err && ans.length === 0) {
+										// no favorites available, make a fresh get to the api
+									} else {
+										console.log('Inside ZRANGE check: ', err);
 									}
+								}
+							);
+							function DoIt() {
+								/* get first 20 favorites, index and save them */
+								getFavorites(req.session, function(f_err, list) {
+									/* index important values from favorite object */
+									redsindex(list, req.session.access_token.user_id); //verify if this is blocking and should be done async
+									/* format favorite object to pull out only relavent info to send client */
+									render(list, function(r_err, favs) {
+										if (!r_err) {
+											/* save favorites into redis */
+											favs.forEach(function(item) {
+												rclient.zadd([
+												  'favorites:'+req.session.access_token.user_id,
+													item.id_str,
+													JSON.stringify(item)]
+												);
+											});
+											res.redirect('/')
+										}
+									});
 								});
-							});
+							} //end DoIt
 						}
 					});
 				}
