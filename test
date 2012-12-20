@@ -24,6 +24,29 @@ client inits ws connection
 display favorites on client
 
 
+
+log in
+nothing in redis
+  get from api
+  index
+  render
+  save
+something in redis
+  check latest from api
+    some found
+      index
+      render
+      save
+    none found
+      do nothing
+
+ws connected
+  send from redis
+
+
+
+
+
 recursive function for getting favorites:
 function get(user_id, total_count, last_id) {
 	count = (total_count < 200) ? ((total_count > 0) ? total_count : 0) : 200

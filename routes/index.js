@@ -73,8 +73,42 @@ exports.routes = {
 				req.session.user = user;
 				cache[req.session.access_token.user_id.toString()] = req.session;
 
-				getFavorites(req.session, redsIndex_cb);
+				checkFavorites(redsIndex_cb);
 			}
+		}
+
+		/* check if new favorites are available or not */
+		function checkFavorites(cb) {
+			var params = {};
+			var args = [
+				'favorites:'+req.session.access_token.user_id,
+				'-1',
+				'-1'];
+
+			/* how many favorites are already in redis */
+			rclient.zcard(args[0], function(e, v) {
+				/* found some items in redis */
+				if (!e && v > 0) {
+					if (req.session.user.favourites_count > v) {
+						/* how many new favorites were added since last time we checked */
+						count = req.session.user.favourites_count - v
+						params.count = count < 200 ? count : 200;
+						/*** TODO: if the count is bigger than 200 need to queue a job to get the remainder later ***/
+						rclient.zrange(args, function(z_err, ans) {
+							if (!z_err && ans.length > 0) {
+								var item = JSON.parse(ans[0]);
+								/* already got some favorites, get newest since this item */
+								params.since_id = item.id_str;  //should be the same as ans[1] which is the score
+								/* get newest favorites if any */
+								getFromApi(req.session, params, cb);
+							}
+						})
+					}
+				} else {
+					/* nothing found in redis */
+					getFromApi(req.session, params, cb);
+				}
+			})
 		}
 
 		/* index the new favorites */
@@ -89,13 +123,15 @@ exports.routes = {
 
 		/* format the favorites to make only needed fields available to client */
 		function render_cb(r_err, favs) {
-			if (!r_err) {
+			if (!r_err && favs.length > 0) {
 				/* save favorites into redis */
-				saveFavorites(req.session, list, function(e, v) {
+				saveFavorites(req.session, favs, function(e, v) {
 					if (!e) res.redirect('/');
 					else res.redirect('/logout');
 				});
-			}
+			} else if (!r_err && favs.length === 0) {
+				res.redirect('/');
+			} else res.redirect('/logout');
 		}
 
 	}, 
@@ -159,7 +195,7 @@ exports.routes = {
 */
 exports.wsroutes = {
 	parse: function(msg, socket) {
-		var data, resp, sess, id, resp_msg = {};
+		var data, resp, sess, id, resp_msg = {}, d;
 		
 		try { data = JSON.parse(msg); }
 		catch (e) { console.log(e); }
@@ -195,10 +231,15 @@ exports.wsroutes = {
 						getFavorites(sess, data.params, function(err, resp) {
 							if (!err) {
 								resp_msg.status = 'ok';
-								render(resp, function(err2, list) {
+								//resp_msg.data = resp;
+								d = JSON.stringify(resp_msg);
+								d = d.slice(0, d.length-1);
+								d += ', "data": '+resp+'}';
+								socket.write(d);
+								/*render(resp, function(err2, list) {
 									resp_msg.data = list;
 									socket.write(JSON.stringify(resp_msg));
-								});
+								});*/
 							} else {
 								resp_msg.status = 'error';
 								resp_msg.error = err.message;
@@ -254,86 +295,35 @@ exports.wsroutes = {
 *  Helper functions
 */
 
-function checkNewFavorites(req, params, cb) {
-	var args, count=0;
+function getFromApi(req, params, cb) {
 	var sess = req.session || req;
+	var name = sess.access_token.screen_name;
+	var u = config.twitter.base_url + '/1.1/favorites/list.json?';
+	var x = {
+		user_id: sess.access_token.user_id,
+		include_entities: true
+	};
 
 	if (typeof params === 'function') {
 		cb = params;
 		params = { count: 20 };
 	}
-
-	if (sess) {
-		/* check in redis first */
-		args = [
-			'favorites:'+sess.access_token.user_id,
-			'-1',
-			'-1'];
-
-		/* how many favorites are already in redis */
-		rclient.zcard(args[0], function(e, v) {
-			/* found some items in redis */
-			if (!e && v > 0) {
-				if (sess.user.favourites_count > v) {
-					/* how many new favorites were added since last time we checked */
-					count = sess.user.favourites_count - v
-					params.count = count < 200 ? count : 200;
-					/*** TODO: if the count is bigger than 200 need to queue a job to get the remainder later ***/
-					rclient.zrange(args, function(z_err, ans) {
-						if (!z_err && ans.length > 0) {
-							var item = JSON.parse(ans[ans.length-1]);
-							/* already got some favorites, get newest since this item */
-							params.since_id = item.id_str;  //should be the same as ans[1] which is the score
-							/* get newest favorites if any */
-							getFromApi(sess, params, function(e, newlist) {
-								render(newlist, function(e2, rlist) {
-									saveFavorites(sess, rlist, function() {
-										return cb(null, rlist);
-									});
-								});
-							});
-						} else {
-							console.log('Error with ZRANGE: ', z_err);
-							return cb(null, []);
-						}
-					});
-				}
-			} else {
-				/* if nothing found in redis goto twitter */
-				getFromApi(sess, params, function(e, newlist) {
-					render(newlist, function(e2, rlist) {
-						saveFavorites(sess, rlist, function() {
-							return cb(null, rlist);
-						});
-					});
-				});
-			}
-		});
-	} else return cb(new Error('No session found'));
-
-	function getFromApi(sess, params, cb) {
-		var name = sess.access_token.screen_name;
-		var u = config.twitter.base_url + '/1.1/favorites/list.json?';
-		var x = {
-			user_id: sess.access_token.user_id,
-			include_entities: true
-		};
-		util._extend(x, params);
-		u += qs.stringify(x);
-		r.get({url: u, oauth: sess.oauth, json: true}, function(err, resp, body) {
-			if (!err && resp.statusCode === 200) {
-				return cb(null, body);
-			} else {
-				if (err) return cb(err);
-				else if (err instanceof Error) return cb(new Error(err));
-				else return cb(new Error(body.errors[0].message));
-			}
-		});
-	}
+	
+	util._extend(x, params);
+	u += qs.stringify(x);
+	r.get({url: u, oauth: sess.oauth, json: true}, function(err, resp, body) {
+		if (!err && resp.statusCode === 200) {
+			return cb(null, body);
+		} else {
+			if (err) return cb(err);
+			else if (err instanceof Error) return cb(new Error(err));
+			else return cb(new Error(body.errors[0].message));
+		}
+	});
 }
 
 function getFavorites(req, params, cb) {
-	var args, ary = [];
+	var args, ary;
 	var sess = req.session || req;
 
 	if (typeof params === 'function') {
@@ -342,18 +332,15 @@ function getFavorites(req, params, cb) {
 	}
 
 	if (sess) {
-		/* check in redis first */
+		/* check in redis */
 		args = [
 			'favorites:'+sess.access_token.user_id,
 			'0',
-			'-1'];
-		rclient.zrange(args, function(e, items) {
+			params.count.toString()];
+		rclient.zrevrange(args, function(e, items) {
 			var x;
 			if (!e) {
-				items.forEach(function(item) {
-					x = JSON.parse(item);
-					ary.push(x);
-				});
+				ary = '[' + items.toString() + ']';
 				return cb(null, ary);
 			} else {
 				return cb(e, []);
@@ -467,27 +454,30 @@ function getEmbededMedia(item, cb) {
 }
 
 function render(list, cb) {
-	if (list[0].coordinates) {
-		var newlist = list.map(function(v, i) {
-			//var t = v.text.slice(0, v.entities.urls[0].indices[0]);
-			return {
-				text: v.text,
-				entities: v.entities,
-				user : {
-					id: v.user.id,
-					pic: v.user.profile_image_url,
-					screen_name: v.user.screen_name,
-					name: v.user.name
-				},
-				retweet_count: v.retweet_count,
-				created_at: v.created_at,
-				id_str: v.id_str
-			}
-		});
-		return cb(null, newlist);
-	} else {
-		return cb(null, list);
-	}
+	console.log(list);
+	if (list.length > 0) {
+		if (list[0].id) {
+			var newlist = list.map(function(v, i) {
+				//var t = v.text.slice(0, v.entities.urls[0].indices[0]);
+				return {
+					text: v.text,
+					entities: v.entities,
+					user : {
+						id: v.user.id,
+						pic: v.user.profile_image_url,
+						screen_name: v.user.screen_name,
+						name: v.user.name
+					},
+					retweet_count: v.retweet_count,
+					created_at: v.created_at,
+					id_str: v.id_str
+				}
+			});
+			return cb(null, newlist);
+		} else {
+			return cb(null, list);
+		}
+	} else return cb(null, []);
 }
 
 function redsindex(ary, user_id) {

@@ -17,7 +17,6 @@ angular.module('FaviousApp.service', []).
 
 			sock.onmessage = function(resp) {
 				var r, a = {};
-
 				try { r = JSON.parse(resp.data); }
 				catch (e) { return cb(new Error(e));	}
 console.log('send onmessage: ', r);
