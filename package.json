@@ -1,15 +1,17 @@
 {
-    "name": "tfavorite",
-    "author": "roy hasson",
-    "version": "0.0.1",
-    "private": false,
-    "dependencies": {
-      "request": "2.12.0",
-      "express": "3.0.2",
-      "jade": "0.27.7",
-      "sockjs": "0.3.4",
-      "connect-redis": "1.4.5",
-      "hiredis": "0.1.14"
-    },
-    "engine": "node 0.8"
+  "name": "tfavorite",
+  "author": "roy hasson",
+  "version": "0.0.1",
+  "private": false,
+  "dependencies": {
+    "request": "2.12.0",
+    "express": "3.0.2",
+    "jade": "0.27.7",
+    "sockjs": "0.3.4",
+    "connect-redis": "1.4.5",
+    "hiredis": "0.1.14",
+    "reds": "~0.2.2",
+    "redis": "~0.8.2"
+  },
+  "engine": "node 0.8"
 }

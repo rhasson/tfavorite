@@ -25,86 +25,79 @@ exports.routes = {
 		else res.render('home', {user: ''});
 	},
 	auth_cb: function(req, res, next) {
-				var v = qs.parse(url.parse(req.url).query);
-				var self = this;
-				if (!v.denied){
-					req.session.access_token.oauth_verifier = v.oauth_verifier;
-					var oauth = {
-								consumer_key: config.twitter.consumer_key,
-								consumer_secret: config.twitter.consumer_secret,
-								token: req.session.access_token.oauth_token,
-								verifier: req.session.access_token.oauth_verifier,
-								token_secret: req.session.access_token.oauth_token_secret
-							},
-							u = config.twitter.base_url + '/oauth/access_token';
-					/* get access token from twitter oauth service */
-					r.post({url: u, oauth: oauth}, function(err, resp, body) {
-						if (!err && resp.statusCode === 200) {
-							req.session.access_token = qs.parse(body);
-							req.session.oauth = {
-								consumer_key: config.twitter.consumer_key,
-								consumer_secret: config.twitter.consumer_secret,
-								token: req.session.access_token.oauth_token,
-								token_secret: req.session.access_token.oauth_token_secret
-							};
+		var v = qs.parse(url.parse(req.url).query);
+		var self = this;
+		if (!v.denied) {
+			req.session.access_token.oauth_verifier = v.oauth_verifier;
+			var oauth = {
+						consumer_key: config.twitter.consumer_key,
+						consumer_secret: config.twitter.consumer_secret,
+						token: req.session.access_token.oauth_token,
+						verifier: req.session.access_token.oauth_verifier,
+						token_secret: req.session.access_token.oauth_token_secret
+					},
+					u = config.twitter.base_url + '/oauth/access_token';
+			/* get access token from twitter oauth service */
+			r.post({url: u, oauth: oauth}, postAuth_cb);
+		}
 
-							/* save session object to cache */
-							cache[req.session.access_token.user_id.toString()] = req.session;
-							var u = config.twitter.base_url + '/1.1/users/show.json?',
-									params = {
-										screen_name: req.session.access_token.screen_name,
-										user_id: req.session.access_token.user_id
-									};
-							u += qs.stringify(params);
-							/* get logged in user information and update session object in cache */
-							r.get({url: u, oauth: req.session.oauth, json: true}, function(err2, resp2, user) {
-								if (!err2 && resp2.statusCode === 200) {
-									req.session.user = user;
-									cache[req.session.access_token.user_id.toString()] = req.session;
-								}
-							});
+		/** callback helper functions **/
 
-							rclient.zrange([
-								'favorites:'+req.session.access_token.user_id,
-								'-1',
-								'-1',
-								'WITHSCORES'],
-								function(err, ans) {
-									var params = {};
-									if (!err && ans.length > 0) {
-										// already got favorites, check the id and attempt to fetch latest
-										params.max_id = ans //access the favorite_id which is the score value
-									} else if (!err && ans.length === 0) {
-										// no favorites available, make a fresh get to the api
-									} else {
-										console.log('Inside ZRANGE check: ', err);
-									}
-								}
-							);
-							function DoIt() {
-								/* get first 20 favorites, index and save them */
-								getFavorites(req.session, function(f_err, list) {
-									/* index important values from favorite object */
-									redsindex(list, req.session.access_token.user_id); //verify if this is blocking and should be done async
-									/* format favorite object to pull out only relavent info to send client */
-									render(list, function(r_err, favs) {
-										if (!r_err) {
-											/* save favorites into redis */
-											favs.forEach(function(item) {
-												rclient.zadd([
-												  'favorites:'+req.session.access_token.user_id,
-													item.id_str,
-													JSON.stringify(item)]
-												);
-											});
-											res.redirect('/')
-										}
-									});
-								});
-							} //end DoIt
-						}
-					});
-				}
+		/* auth token response */
+		function postAuth_cb(err, resp, body) {
+			if (!err && resp.statusCode === 200) {
+				req.session.access_token = qs.parse(body);
+				req.session.oauth = {
+					consumer_key: config.twitter.consumer_key,
+					consumer_secret: config.twitter.consumer_secret,
+					token: req.session.access_token.oauth_token,
+					token_secret: req.session.access_token.oauth_token_secret
+				};
+
+				/* save session object to cache */
+				cache[req.session.access_token.user_id.toString()] = req.session;
+				var u = config.twitter.base_url + '/1.1/users/show.json?',
+						params = {
+							screen_name: req.session.access_token.screen_name,
+							user_id: req.session.access_token.user_id
+						};
+				u += qs.stringify(params);
+				/* get logged in user information and update session object in cache */
+				r.get({url: u, oauth: req.session.oauth, json: true}, getUserInfo_cb);
+			}
+		}
+
+		/* user info from api response */
+		function getUserInfo_cb(err, resp, user) {
+			if (!err && resp.statusCode === 200) {
+				req.session.user = user;
+				cache[req.session.access_token.user_id.toString()] = req.session;
+
+				getFavorites(req.session, redsIndex_cb);
+			}
+		}
+
+		/* index the new favorites */
+		function redsIndex_cb(f_err, list) {
+			if (!f_err) {
+				/* index important values from favorite object */
+				redsindex(list, req.session.access_token.user_id); //verify if this is blocking and should be done async
+				/* format favorite object to pull out only relavent info to send client */
+				render(list, render_cb);
+			}
+		}
+
+		/* format the favorites to make only needed fields available to client */
+		function render_cb(r_err, favs) {
+			if (!r_err) {
+				/* save favorites into redis */
+				saveFavorites(req.session, list, function(e, v) {
+					if (!e) res.redirect('/');
+					else res.redirect('/logout');
+				});
+			}
+		}
+
 	}, 
 	twitter_login: function(req, res, next) {
 		var oauth = {
@@ -126,7 +119,7 @@ exports.routes = {
 		});
 	},
 	logout: function(req, res, next) {
-		cach[req.session.access_token.user_id] = null;
+		cache[req.session.access_token.user_id] = null;
 		req.session = null;
 		rclient.quit();
 		res.redirect('/');
@@ -261,8 +254,8 @@ exports.wsroutes = {
 *  Helper functions
 */
 
-function getFavorites(req, params, cb) {
-	var name, u, x;
+function checkNewFavorites(req, params, cb) {
+	var args, count=0;
 	var sess = req.session || req;
 
 	if (typeof params === 'function') {
@@ -271,9 +264,57 @@ function getFavorites(req, params, cb) {
 	}
 
 	if (sess) {
-		name = sess.access_token.screen_name;
-		u = config.twitter.base_url + '/1.1/favorites/list.json?';
-		x = {
+		/* check in redis first */
+		args = [
+			'favorites:'+sess.access_token.user_id,
+			'-1',
+			'-1'];
+
+		/* how many favorites are already in redis */
+		rclient.zcard(args[0], function(e, v) {
+			/* found some items in redis */
+			if (!e && v > 0) {
+				if (sess.user.favourites_count > v) {
+					/* how many new favorites were added since last time we checked */
+					count = sess.user.favourites_count - v
+					params.count = count < 200 ? count : 200;
+					/*** TODO: if the count is bigger than 200 need to queue a job to get the remainder later ***/
+					rclient.zrange(args, function(z_err, ans) {
+						if (!z_err && ans.length > 0) {
+							var item = JSON.parse(ans[ans.length-1]);
+							/* already got some favorites, get newest since this item */
+							params.since_id = item.id_str;  //should be the same as ans[1] which is the score
+							/* get newest favorites if any */
+							getFromApi(sess, params, function(e, newlist) {
+								render(newlist, function(e2, rlist) {
+									saveFavorites(sess, rlist, function() {
+										return cb(null, rlist);
+									});
+								});
+							});
+						} else {
+							console.log('Error with ZRANGE: ', z_err);
+							return cb(null, []);
+						}
+					});
+				}
+			} else {
+				/* if nothing found in redis goto twitter */
+				getFromApi(sess, params, function(e, newlist) {
+					render(newlist, function(e2, rlist) {
+						saveFavorites(sess, rlist, function() {
+							return cb(null, rlist);
+						});
+					});
+				});
+			}
+		});
+	} else return cb(new Error('No session found'));
+
+	function getFromApi(sess, params, cb) {
+		var name = sess.access_token.screen_name;
+		var u = config.twitter.base_url + '/1.1/favorites/list.json?';
+		var x = {
 			user_id: sess.access_token.user_id,
 			include_entities: true
 		};
@@ -288,7 +329,66 @@ function getFavorites(req, params, cb) {
 				else return cb(new Error(body.errors[0].message));
 			}
 		});
-	} else return cb(false);
+	}
+}
+
+function getFavorites(req, params, cb) {
+	var args, ary = [];
+	var sess = req.session || req;
+
+	if (typeof params === 'function') {
+		cb = params;
+		params = { count: 20 };
+	}
+
+	if (sess) {
+		/* check in redis first */
+		args = [
+			'favorites:'+sess.access_token.user_id,
+			'0',
+			'-1'];
+		rclient.zrange(args, function(e, items) {
+			var x;
+			if (!e) {
+				items.forEach(function(item) {
+					x = JSON.parse(item);
+					ary.push(x);
+				});
+				return cb(null, ary);
+			} else {
+				return cb(e, []);
+			}
+		});
+	}
+}
+
+/*
+*  Save favorites to redis
+*  @req: session object
+*  @favs: array of favorires
+*  @cb: callback
+*/
+function saveFavorites(req, favs, cb) {
+	var sess = req.session || req;
+	var args;
+
+	if (typeof favs === 'fuction') {
+		cd = favs;
+		return cb(new Error('missing list of favorites to save'));
+	}
+
+	if (sess) {
+		favs.forEach(function(item) {
+			args = [
+			  'favorites:'+sess.access_token.user_id,
+				item.id_str,
+				JSON.stringify(item)];
+			rclient.zadd(args, function (e, v) {
+				if (e) console.log('Error with saving favorites to redi, ZADD: ', e);
+			});
+		});
+		return cb(null);
+	}
 }
 
 /*
@@ -367,23 +467,27 @@ function getEmbededMedia(item, cb) {
 }
 
 function render(list, cb) {
-	var newlist = list.map(function(v, i) {
-		//var t = v.text.slice(0, v.entities.urls[0].indices[0]);
-		return {
-			text: v.text,
-			entities: v.entities,
-			user : {
-				id: v.user.id,
-				pic: v.user.profile_image_url,
-				screen_name: v.user.screen_name,
-				name: v.user.name
-			},
-			retweet_count: v.retweet_count,
-			created_at: v.created_at,
-			fav_id: v.id_str
-		}
-	});
-	process.nextTick(return cb(null, newlist));
+	if (list[0].coordinates) {
+		var newlist = list.map(function(v, i) {
+			//var t = v.text.slice(0, v.entities.urls[0].indices[0]);
+			return {
+				text: v.text,
+				entities: v.entities,
+				user : {
+					id: v.user.id,
+					pic: v.user.profile_image_url,
+					screen_name: v.user.screen_name,
+					name: v.user.name
+				},
+				retweet_count: v.retweet_count,
+				created_at: v.created_at,
+				id_str: v.id_str
+			}
+		});
+		return cb(null, newlist);
+	} else {
+		return cb(null, list);
+	}
 }
 
 function redsindex(ary, user_id) {
@@ -392,20 +496,23 @@ function redsindex(ary, user_id) {
 		s.index(item.text, item.id_str);
 		s.index(item.user.name, item.id_str);
 		s.index(item.user.screen_name, item.id_str);
-		s.index(item.user.place.full_name, item.id_str);
-		s.index(item.user.place.country, item.id_str);
+/*		if (item.user.place) {
+			s.index(item.user.place.full_name, item.id_str);
+			s.index(item.user.place.country, item.id_str);
+		}
+*/
 		if (item.entities.urls.length) {
 			item.entities.urls.forEach(function(u) {
 				s.index(u.expanded_url, item.id_str);
 			});
 		}
 		if (item.entities.hashtags.length) {
-			items.entities.hashtags.forEach(function(h) {
+			item.entities.hashtags.forEach(function(h) {
 				s.index(h.text, item.id_str);
 			});
 		}
 		if (item.entities.user_mentions.length) {
-			items.entities.user_mentions.forEach(function(m) {
+			item.entities.user_mentions.forEach(function(m) {
 				s.index(m.name, item.id_str);
 				s.index(m.screen_name, item.id_str);
 			});
