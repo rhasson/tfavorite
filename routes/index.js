@@ -10,9 +10,12 @@ var r = require('request'),
 		url = require('url'),
 		util = require('util'),
 		reds = require('reds'),
+		kue = require('kue'),
 		redis = require('redis'),
 		rclient = redis.createClient(),
-		cache = {};
+		jobs = kue.createQueue(),
+		cache = {},
+		job_process_flag = false;
 
 /*
 *  Basic HTTP routes handled by Express
@@ -126,10 +129,22 @@ exports.routes = {
 			if (!r_err && favs.length > 0) {
 				/* save favorites into redis */
 				saveFavorites(req.session, favs, function(e, v) {
-					if (!e) res.redirect('/');
+					if (!e) {
+						jobs.create('download all favorites', {
+							session: req.session,
+							user_id: req.session.access_token.user_id,
+							total_count: req.session.user.favourites_count,
+						}).save();
+						res.redirect('/');
+					}
 					else res.redirect('/logout');
 				});
 			} else if (!r_err && favs.length === 0) {
+				jobs.create('download all favorites', {
+					session: req.session,
+					user_id: req.session.access_token.user_id,
+					total_count: req.session.user.favourites_count,
+				}).save();
 				res.redirect('/');
 			} else res.redirect('/logout');
 		}
@@ -211,7 +226,6 @@ exports.wsroutes = {
 								data: {	token: b.toString('base64') }
 							};
 							cache[resp.data.token] = data.id;  //save the ws session id with the user id
-							//sockets[resp.data.token] = socket;
 						} else {
 							resp = {
 								status: 'error',
@@ -236,10 +250,6 @@ exports.wsroutes = {
 								d = d.slice(0, d.length-1);
 								d += ', "data": '+resp+'}';
 								socket.write(d);
-								/*render(resp, function(err2, list) {
-									resp_msg.data = list;
-									socket.write(JSON.stringify(resp_msg));
-								});*/
 							} else {
 								resp_msg.status = 'error';
 								resp_msg.error = err.message;
@@ -295,6 +305,13 @@ exports.wsroutes = {
 *  Helper functions
 */
 
+
+/*
+* gets favorites from twitter api
+* @req: session object
+* @params: parameters to pass to the api call
+* @cb: callback - return json object of favorites array from twitter or error
+*/
 function getFromApi(req, params, cb) {
 	var sess = req.session || req;
 	var name = sess.access_token.screen_name;
@@ -322,6 +339,12 @@ function getFromApi(req, params, cb) {
 	});
 }
 
+/*
+* gets favorites from redis assuming some were previously fetched from the api
+* @req: session object
+* @params: parameters to pass to the redis call
+* @cb: callback - returned is a JSON string with an array of favorite objects
+*/
 function getFavorites(req, params, cb) {
 	var args, ary;
 	var sess = req.session || req;
@@ -353,7 +376,7 @@ function getFavorites(req, params, cb) {
 *  Save favorites to redis
 *  @req: session object
 *  @favs: array of favorires
-*  @cb: callback
+*  @cb: callback - doesn't return anything  TODO: return error if save has failed and handle it upstream
 */
 function saveFavorites(req, favs, cb) {
 	var sess = req.session || req;
@@ -480,6 +503,11 @@ function render(list, cb) {
 	} else return cb(null, []);
 }
 
+/*
+* index important text elemnts into a search index for the particular user
+* @ary: array of favorite object directly from twitter api
+* @user_id: user id of the logged in user
+*/
 function redsindex(ary, user_id) {
 	var s = reds.createSearch('searchindex:'+user_id);
 	ary.forEach(function(item, i) {
