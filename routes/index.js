@@ -14,8 +14,7 @@ var r = require('request'),
 		redis = require('redis'),
 		rclient = redis.createClient(),
 		jobs = kue.createQueue(),
-		cache = {},
-		job_process_flag = false;
+		cache = {};
 
 /*
 *  Basic HTTP routes handled by Express
@@ -128,7 +127,7 @@ exports.routes = {
 		function render_cb(r_err, favs) {
 			if (!r_err && favs.length > 0) {
 				/* save favorites into redis */
-				saveFavorites(req.session, favs, function(e, v) {
+				saveFavorites(req.session.access_token.user_id, favs, function(e, v) {
 					if (!e) {
 						jobs.create('download all favorites', {
 							session: req.session,
@@ -374,12 +373,11 @@ function getFavorites(req, params, cb) {
 
 /*
 *  Save favorites to redis
-*  @req: session object
+*  @user_id: user id
 *  @favs: array of favorires
 *  @cb: callback - doesn't return anything  TODO: return error if save has failed and handle it upstream
 */
-function saveFavorites(req, favs, cb) {
-	var sess = req.session || req;
+function saveFavorites(user_id, favs, cb) {
 	var args;
 
 	if (typeof favs === 'fuction') {
@@ -387,10 +385,10 @@ function saveFavorites(req, favs, cb) {
 		return cb(new Error('missing list of favorites to save'));
 	}
 
-	if (sess) {
+	if (user_id) {
 		favs.forEach(function(item) {
 			args = [
-			  'favorites:'+sess.access_token.user_id,
+			  'favorites:'+user_id,
 				item.id_str,
 				JSON.stringify(item)];
 			rclient.zadd(args, function (e, v) {
@@ -477,30 +475,31 @@ function getEmbededMedia(item, cb) {
 }
 
 function render(list, cb) {
-	console.log(list);
-	if (list.length > 0) {
-		if (list[0].id) {
-			var newlist = list.map(function(v, i) {
-				//var t = v.text.slice(0, v.entities.urls[0].indices[0]);
-				return {
-					text: v.text,
-					entities: v.entities,
-					user : {
-						id: v.user.id,
-						pic: v.user.profile_image_url,
-						screen_name: v.user.screen_name,
-						name: v.user.name
-					},
-					retweet_count: v.retweet_count,
-					created_at: v.created_at,
-					id_str: v.id_str
-				}
-			});
-			return cb(null, newlist);
-		} else {
-			return cb(null, list);
-		}
-	} else return cb(null, []);
+  process.nextTick(function() {
+    if (list.length > 0) {
+      if (list[0].id) {
+        var newlist = list.map(function(v, i) {
+          //var t = v.text.slice(0, v.entities.urls[0].indices[0]);
+          return {
+            text: v.text,
+            entities: v.entities,
+            user : {
+              id: v.user.id,
+              pic: v.user.profile_image_url,
+              screen_name: v.user.screen_name,
+              name: v.user.name
+            },
+            retweet_count: v.retweet_count,
+            created_at: v.created_at,
+            id_str: v.id_str
+          }
+        });
+        return cb(null, newlist);
+      } else {
+        return cb(null, list);
+      }
+    } else return cb(null, []);
+  });
 }
 
 /*

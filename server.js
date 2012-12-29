@@ -11,13 +11,10 @@ var Express = require('express'),
     wsroutes = require('./routes').wsroutes,
     ws = sockjs.createServer({ sockjs_url: 'http://favio.us/js/sockjs-0.3.4.min.js',
         jsessionid: true }),
-    ws_server = http.createServer(server);
+    ws_server = http.createServer(server),
 		RedisStore = require('connect-redis')(Express),
-    redis = require('redis'),
-    kue = require('kue'),
-    jobs = kue.createQueue(),
-    qs = require('querystring'),
-    r = require('request');
+    fork = require('child_process').fork,
+    proc = null;
 
 /* Server Configuration */
 server.configure(function(){
@@ -60,40 +57,24 @@ server.get('/embed/:id', routes.get_embed);
 
 ws.installHandlers(ws_server, {prefix: '/ws'});
 
-jobs.process('download all favorites', 5, function(job, done) {
-  var rclient = redis.createClient();
-  rclient.zrange([
-    'favorites:'+job.data.user_id,
-    '-1',
-    '-1'], function(err, last_item){
-      if (!err) {
-        var x = JSON.parse(last_item);
-        get(job.data.user_id, job.data.total_count, x.id_str);
-      }
-    });
-
-  function get(user_id, total_count, last_id) {
-    var count = (total_count < 200) ? ((total_count > 0) ? total_count : 0) : 200
-    total_count -= count;
-
-    var u = base_api + '/favorites/list.json?' +
-    qs.stringify({
-      user_id: user_id,
-      count: total_count, //200 is max
-      max_id: last_id
-    });
-
-    r.get({url: u, json: true}, function(err, resp, body) {
-      if (!err && resp.statusCode === 200 && !body.error) {
-        last_id = body[body.length-1].id_str;
-        if (total_count === 0) done();
-        else get(user_id, total_conut, last_id);
-      } else {
-        var e = err ? err : body.errors[0].message;
-        done(new Error(e));
-      }
-    });
-  }
-});
-
 ws_server.listen(80); //8002
+
+proc = fork('./worker/kue_process_main.js');
+proc.on('error', function(err) {
+  console.log('Kue child process ', proc.pid, ' failed with error: ', err);
+  proc.disconnect();
+  process.nextTick(function() {
+    proc = fork('./worker/kue_process_main.js');
+  });
+});
+proc.on('exit', function(code, signal) {
+  console.log('Kue child process ', proc.pid,' exited with: ', code, signal);
+  proc.disconnect();
+});
+proc.on('close', function() {
+  console.log('Kue child process ', proc.pid, ' closed');
+  proc.disconnect();
+  process.nextTick(function() {
+    proc = fork('./worker/kue_process_main.js');
+  });
+});

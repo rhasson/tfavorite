@@ -42,6 +42,7 @@ FaviousApp.directive('favItem', function(socket, $http, $filter) {
 
 		$(click_el).on('click', function(evt) {
 			var urls = scope.item.entities.urls;
+			//TODO: handle multiple urls where urls variable is an array
 			if (urls.expanded_url.indexOf('instagr.am') !== -1) {
 				scope.embeded_data = { url: urls.expanded_url + '/media/?size=m' };
 				if (!$(embed_el).children('img').length) {
