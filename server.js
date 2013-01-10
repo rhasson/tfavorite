@@ -13,8 +13,7 @@ var Express = require('express'),
         jsessionid: true }),
     ws_server = http.createServer(server),
 		RedisStore = require('connect-redis')(Express),
-    fork = require('child_process').fork,
-    proc = null;
+    proc = require('./worker/index.js');
 
 /* Server Configuration */
 server.configure(function(){
@@ -59,22 +58,4 @@ ws.installHandlers(ws_server, {prefix: '/ws'});
 
 ws_server.listen(80); //8002
 
-proc = fork('./worker/kue_process_main.js');
-proc.on('error', function(err) {
-  console.log('Kue child process ', proc.pid, ' failed with error: ', err);
-  proc.disconnect();
-  process.nextTick(function() {
-    proc = fork('./worker/kue_process_main.js');
-  });
-});
-proc.on('exit', function(code, signal) {
-  console.log('Kue child process ', proc.pid,' exited with: ', code, signal);
-  proc.disconnect();
-});
-proc.on('close', function() {
-  console.log('Kue child process ', proc.pid, ' closed');
-  proc.disconnect();
-  process.nextTick(function() {
-    proc = fork('./worker/kue_process_main.js');
-  });
-});
+proc.startWorker();

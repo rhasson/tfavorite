@@ -5,7 +5,8 @@ var redis = require('redis'),
   qs = require('querystring'),
   reds = require('reds'),
   r = require('request'),
-  base_url = 'https://api.twitter.com';
+  base_url = require('../config').config.twitter.base_url,
+  require('console-trace');
 
 jobs.process('download all favorites', 5, function(job, done) {
   console.log('Kue child has began processing for: ', job.data.user_id);
@@ -26,13 +27,13 @@ jobs.process('download all favorites', 5, function(job, done) {
     var count = (total_count < 200) ? ((total_count > 0) ? total_count : 0) : 200
     var remaining = total_count - count;
 
-    var u = base_url + '/1.1/favorites/list.json?' +
+    var u = base_url + '/favorites/list.json?' +
     qs.stringify({
       user_id: user_id,
       count: count, //200 is max
       max_id: last_id
     });
-console.log('Child URL: ', u);
+
     r.get({url: u, oauth: job.data.session.oauth, json: true}, function(err, resp, body) {
       var newlist, e;
       if (!err && resp.statusCode === 200 && !body.error) {
@@ -141,13 +142,17 @@ function saveFavorites(id, favs) {
 
 process.on('disconnect', function() {
   console.log('Worker disconnected');
+  process.exit(1)
 });
 process.on('error', function(err) {
   console.log('Worker encountered an error: ', err);
+  process.exit(1);
 });
 process.on('close', function() {
   console.log('Worker closed');
+  process.exit(1);
 });
 process.on('exit', function(code, signal) {
   console.log('Worker exited with code: ', code, ' and signal: ', signal);
+  process.exit(1);
 });

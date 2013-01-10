@@ -16,6 +16,8 @@ var r = require('request'),
 		jobs = kue.createQueue(),
 		cache = {};
 
+require('console-trace');
+
 /*
 *  Basic HTTP routes handled by Express
 */
@@ -38,7 +40,8 @@ exports.routes = {
 						verifier: req.session.access_token.oauth_verifier,
 						token_secret: req.session.access_token.oauth_token_secret
 					},
-					u = config.twitter.base_url + '/oauth/access_token';
+					//need to remove the version from the api url
+					u = config.twitter.base_url.substr(0, config.twitter.base_url.length-4) + '/oauth/access_token';
 			/* get access token from twitter oauth service */
 			r.post({url: u, oauth: oauth}, postAuth_cb);
 		}
@@ -58,7 +61,7 @@ exports.routes = {
 
 				/* save session object to cache */
 				cache[req.session.access_token.user_id.toString()] = req.session;
-				var u = config.twitter.base_url + '/1.1/users/show.json?',
+				var u = config.twitter.base_url + '/users/show.json?',
 						params = {
 							screen_name: req.session.access_token.screen_name,
 							user_id: req.session.access_token.user_id
@@ -79,7 +82,7 @@ exports.routes = {
 			}
 		}
 
-		/* check if new favorites are available or not */
+		/* check if new favorites are available since last login */
 		function checkFavorites(cb) {
 			var params = {};
 			var args = [
@@ -110,7 +113,7 @@ exports.routes = {
 					/* nothing found in redis */
 					getFromApi(req.session, params, cb);
 				}
-			})
+			});
 		}
 
 		/* index the new favorites */
@@ -314,7 +317,7 @@ exports.wsroutes = {
 function getFromApi(req, params, cb) {
 	var sess = req.session || req;
 	var name = sess.access_token.screen_name;
-	var u = config.twitter.base_url + '/1.1/favorites/list.json?';
+	var u = config.twitter.base_url + '/favorites/list.json?';
 	var x = {
 		user_id: sess.access_token.user_id,
 		include_entities: true
@@ -381,7 +384,7 @@ function saveFavorites(user_id, favs, cb) {
 	var args;
 
 	if (typeof favs === 'fuction') {
-		cd = favs;
+		cb = favs;
 		return cb(new Error('missing list of favorites to save'));
 	}
 
@@ -413,7 +416,7 @@ function removeFavorites(req, id, cb) {
 		return cb(new Error('missing id'));
 	}
 	if (sess) {
-		u = config.twitter.base_url + '/1.1/favorites/destroy.json';
+		u = config.twitter.base_url + '/favorites/destroy.json';
 		r.post({url: u, oauth: sess.oauth, body: 'id='+id, json: true}, function(err, resp, body) {
 			if (!err && resp.statusCode === 200) {
 				return cb(null, body);
