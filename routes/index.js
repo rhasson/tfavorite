@@ -7,6 +7,7 @@ var r = require('request'),
 		qs = require('querystring'),
 		crypto = require('crypto'),
 		config = require('../config').config,
+		db = require('../lib/db'),
 		url = require('url'),
 		util = require('util'),
 		reds = require('reds'),
@@ -52,6 +53,7 @@ exports.routes = {
 		function postAuth_cb(err, resp, body) {
 			if (!err && resp.statusCode === 200) {
 				req.session.access_token = qs.parse(body);
+				//req.session.access_token.user_id = req.session.access_token.user_id.toString();
 				req.session.oauth = {
 					consumer_key: config.twitter.consumer_key,
 					consumer_secret: config.twitter.consumer_secret,
@@ -60,7 +62,7 @@ exports.routes = {
 				};
 
 				/* save session object to cache */
-				cache[req.session.access_token.user_id.toString()] = req.session;
+				//cache[req.session.access_token.user_id] = req.session;
 				var u = config.twitter.base_url + '/users/show.json?',
 						params = {
 							screen_name: req.session.access_token.screen_name,
@@ -76,81 +78,79 @@ exports.routes = {
 		function getUserInfo_cb(err, resp, user) {
 			if (!err && resp.statusCode === 200) {
 				req.session.user = user;
-				cache[req.session.access_token.user_id.toString()] = req.session;
-
+				cache[req.session.user.id_str] = req.session;
 				checkFavorites(redsIndex_cb);
 			}
 		}
 
 		/* check if new favorites are available since last login */
 		function checkFavorites(cb) {
-			var params = {};
-			var args = [
-				'favorites:'+req.session.access_token.user_id,
-				'-1',
-				'-1'];
+			var params = {},
+				user_id = req.session.user.id_str;
 
-			/* how many favorites are already in redis */
-			rclient.zcard(args[0], function(e, v) {
-				/* found some items in redis */
-				if (!e && v > 0) {
-					if (req.session.user.favourites_count > v) {
-						/* how many new favorites were added since last time we checked */
-						count = req.session.user.favourites_count - v
-						params.count = count < 200 ? count : 200;
-						/*** TODO: if the count is bigger than 200 need to queue a job to get the remainder later ***/
-						rclient.zrange(args, function(z_err, ans) {
-							if (!z_err && ans.length > 0) {
-								var item = JSON.parse(ans[0]);
-								/* already got some favorites, get newest since this item */
-								params.since_id = item.id_str;  //should be the same as ans[1] which is the score
-								/* get newest favorites if any */
-								getFromApi(req.session, params, cb);
+			db.count(user_id, function(e,count) {
+				if (!e && count.length) {
+					count = count[0];				
+					if (req.session.user.favourites_count > count) {
+						remains = req.session.user.favourites_count - count;
+						params.count = remains < 200 ? remains : 200;
+						db.get(user_id, function(err, current_favs) {
+							if (!err && current_favs.length) {
+								params.since_id = current_favs[0].id_str;  //most recent fav from db
+								getFromApi(req.session, params, save_cb);
+								if (remains > 200) {
+									jobs.create('download range', {
+										session: req.session,
+										user_id: user_id,
+										total_count: req.session.user.favourites_count,
+										since_id: current_favs[0].id_str,
+										remains: remains - params.count
+									}).save();
+								}
 							}
-						})
+						});
+					} else {  //no new favorites on twitter
+						db.get(user_id, cb);
 					}
-				} else {
-					/* nothing found in redis */
-					getFromApi(req.session, params, cb);
+				} else {  //first time user, nothing in db
+console.t.log('getFromApi')
+					getFromApi(req.session, save_cb);
+					jobs.create('download all favorites', {
+						session: req.session,
+						user_id: req.session.user.id_str,
+						total_count: req.session.user.favourites_count,
+					}).save();
 				}
 			});
+		}
+
+		/* save in db after rendering but before redirecting */
+		function save_cb(s_err, list) {
+			/*if (!s_err) {
+				redsindex(list, req.session.user.id_str);
+				render(list, function(e, favs) {
+					db.set(req.session.user.id_str, favs, render_cb);
+				});
+			}*/
+			console.log('length: ', list.length, ' list: ', list)
 		}
 
 		/* index the new favorites */
 		function redsIndex_cb(f_err, list) {
 			if (!f_err) {
 				/* index important values from favorite object */
-				redsindex(list, req.session.access_token.user_id); //verify if this is blocking and should be done async
-				/* format favorite object to pull out only relavent info to send client */
+				redsindex(list, req.session.user.id_str); //verify if this is blocking and should be done async
+				/* format favorite object to pull out only relevant info to send client */
 				render(list, render_cb);
 			}
 		}
 
 		/* format the favorites to make only needed fields available to client */
 		function render_cb(r_err, favs) {
-			if (!r_err && favs.length > 0) {
-				/* save favorites into redis */
-				saveFavorites(req.session.access_token.user_id, favs, function(e, v) {
-					if (!e) {
-						jobs.create('download all favorites', {
-							session: req.session,
-							user_id: req.session.access_token.user_id,
-							total_count: req.session.user.favourites_count,
-						}).save();
-						res.redirect('/');
-					}
-					else res.redirect('/logout');
-				});
-			} else if (!r_err && favs.length === 0) {
-				jobs.create('download all favorites', {
-					session: req.session,
-					user_id: req.session.access_token.user_id,
-					total_count: req.session.user.favourites_count,
-				}).save();
+			if (!r_err) {
 				res.redirect('/');
 			} else res.redirect('/logout');
 		}
-
 	}, 
 	twitter_login: function(req, res, next) {
 		var oauth = {
@@ -158,32 +158,29 @@ exports.routes = {
 			consumer_key: config.twitter.consumer_key,
 			consumer_secret: config.twitter.consumer_secret
 		},
-		u = config.twitter.base_url + '/oauth/request_token';
+		u = config.twitter.base_url.substr(0, config.twitter.base_url.length-4) + '/oauth/request_token';
 
 		r.post({url: u, oauth: oauth}, function(err, resp, body) {
 			if (!err && resp.statusCode === 200) {
 				req.session.access_token = qs.parse(body);
 
 				res.redirect(
-					config.twitter.base_url + 
+					config.twitter.base_url.substr(0, config.twitter.base_url.length-4) + 
 					'/oauth/authenticate?' + 
 					qs.stringify({oauth_token: req.session.access_token.oauth_token}));
-			} else console.log(body);
+			} else console.t.log(body);
 		});
 	},
 	logout: function(req, res, next) {
-		cache[req.session.access_token.user_id] = null;
+		cache[req.session.user.id_str] = null;
 		req.session = null;
 		rclient.quit();
 		res.redirect('/');
 	},
 	get_favorites: function(req, res, next) {
-		getFavorites(req, req.query, function(err, data){
-			if (!err) {
-				render(data, function(err, list) {
-					res.json(list);
-				});
-			} else next();
+		getFavorites(req.session.user.id_str, req.query, function(err, data){
+			if (!err) res.json(list);
+			else next();
 		});
 	},
 	get_embed: function(req, res, next) {
@@ -244,14 +241,14 @@ exports.wsroutes = {
 					if (id) {
 						sess = cache[id];
 						resp_msg.token = data.token;
-						getFavorites(sess, data.params, function(err, resp) {
+						db.get(sess.user.id_str, data.params, function(err, resp) {
 							if (!err) {
 								resp_msg.status = 'ok';
-								//resp_msg.data = resp;
-								d = JSON.stringify(resp_msg);
+								resp_msg.data = resp;
+								/*d = JSON.stringify(resp_msg);
 								d = d.slice(0, d.length-1);
-								d += ', "data": '+resp+'}';
-								socket.write(d);
+								d += ', "data": '+resp+'}';*/
+								socket.write(JSON.stringify(resp_msg));
 							} else {
 								resp_msg.status = 'error';
 								resp_msg.error = err.message;
@@ -319,7 +316,7 @@ function getFromApi(req, params, cb) {
 	var name = sess.access_token.screen_name;
 	var u = config.twitter.base_url + '/favorites/list.json?';
 	var x = {
-		user_id: sess.access_token.user_id,
+		user_id: sess.user.id_str,
 		include_entities: true
 	};
 
@@ -339,67 +336,6 @@ function getFromApi(req, params, cb) {
 			else return cb(new Error(body.errors[0].message));
 		}
 	});
-}
-
-/*
-* gets favorites from redis assuming some were previously fetched from the api
-* @req: session object
-* @params: parameters to pass to the redis call
-* @cb: callback - returned is a JSON string with an array of favorite objects
-*/
-function getFavorites(req, params, cb) {
-	var args, ary;
-	var sess = req.session || req;
-
-	if (typeof params === 'function') {
-		cb = params;
-		params = { count: 20 };
-	}
-
-	if (sess) {
-		/* check in redis */
-		args = [
-			'favorites:'+sess.access_token.user_id,
-			'0',
-			params.count.toString()];
-		rclient.zrevrange(args, function(e, items) {
-			var x;
-			if (!e) {
-				ary = '[' + items.toString() + ']';
-				return cb(null, ary);
-			} else {
-				return cb(e, []);
-			}
-		});
-	}
-}
-
-/*
-*  Save favorites to redis
-*  @user_id: user id
-*  @favs: array of favorires
-*  @cb: callback - doesn't return anything  TODO: return error if save has failed and handle it upstream
-*/
-function saveFavorites(user_id, favs, cb) {
-	var args;
-
-	if (typeof favs === 'fuction') {
-		cb = favs;
-		return cb(new Error('missing list of favorites to save'));
-	}
-
-	if (user_id) {
-		favs.forEach(function(item) {
-			args = [
-			  'favorites:'+user_id,
-				item.id_str,
-				JSON.stringify(item)];
-			rclient.zadd(args, function (e, v) {
-				if (e) console.log('Error with saving favorites to redi, ZADD: ', e);
-			});
-		});
-		return cb(null);
-	}
 }
 
 /*
@@ -487,7 +423,7 @@ function render(list, cb) {
             text: v.text,
             entities: v.entities,
             user : {
-              id: v.user.id,
+              id: v.user.id_str,
               pic: v.user.profile_image_url,
               screen_name: v.user.screen_name,
               name: v.user.name

@@ -1,4 +1,5 @@
 node_modules/
 keys.txt
 config.js
+rem_db.js
 .DS_Store

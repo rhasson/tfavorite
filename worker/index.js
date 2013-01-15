@@ -1,4 +1,4 @@
-var fork = require('child_process').fork,
+var fork = require('child_process').fork;
 var proc = null;
 
 exports.startWorker = function() {

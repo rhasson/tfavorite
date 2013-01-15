@@ -5,11 +5,12 @@ var redis = require('redis'),
   qs = require('querystring'),
   reds = require('reds'),
   r = require('request'),
-  base_url = require('../config').config.twitter.base_url,
-  require('console-trace');
+  base_url = require('../config').config.twitter.base_url;
+  
+require('console-trace');
 
 jobs.process('download all favorites', 5, function(job, done) {
-  console.log('Kue child has began processing for: ', job.data.user_id);
+  console.t.log('Kue child has began processing for: ', job.data.user_id);
   var s = reds.createSearch('searchindex:'+job.data.user_id);
   rclient.zrange([
     'favorites:'+job.data.user_id,
@@ -23,7 +24,7 @@ jobs.process('download all favorites', 5, function(job, done) {
 
 //TODO: add logic to handle API quotas and limits
   function get(user_id, total_count, last_id) {
-    console.log('Child GET for ', user_id, ' and count: ', total_count);
+    console.t.log('Child GET for ', user_id, ' and count: ', total_count);
     var count = (total_count < 200) ? ((total_count > 0) ? total_count : 0) : 200
     var remaining = total_count - count;
 
