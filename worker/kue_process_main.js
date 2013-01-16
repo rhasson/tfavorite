@@ -5,6 +5,7 @@ var redis = require('redis'),
   qs = require('querystring'),
   reds = require('reds'),
   r = require('request'),
+  db = require('../lib/db'),
   base_url = require('../config').config.twitter.base_url;
   
 require('console-trace');
@@ -12,25 +13,28 @@ require('console-trace');
 jobs.process('download all favorites', 5, function(job, done) {
   console.t.log('Kue child has began processing for: ', job.data.user_id);
   var s = reds.createSearch('searchindex:'+job.data.user_id);
-  rclient.zrange([
-    'favorites:'+job.data.user_id,
-    '-1',
-    '-1'], function(err, last_item){
-      if (!err) {
-        var x = JSON.parse(last_item);
-        get(job.data.user_id, job.data.total_count, x.id_str);
-      }
-    });
-
+  var couch_obj = {
+    startkey: [job.data.user_id],
+    endkey: [job.data.user_id, {}],
+    descending: false,
+    limit: 1
+  };
+  //get the oldest favorite
+  db._db.view('favorites/by_user_id', couch_obj, function(err, doc) {
+    doc = format(doc);
+    if (doc.length > 0) {
+      get(job.data.total_count, doc[0].value.id_str);
+    }
+  });
 //TODO: add logic to handle API quotas and limits
-  function get(user_id, total_count, last_id) {
-    console.t.log('Child GET for ', user_id, ' and count: ', total_count);
+  function get(total_count, last_id) {
+    console.t.log('Child GET for ', job.data.user_id, ' and count: ', total_count);
     var count = (total_count < 200) ? ((total_count > 0) ? total_count : 0) : 200
     var remaining = total_count - count;
 
     var u = base_url + '/favorites/list.json?' +
     qs.stringify({
-      user_id: user_id,
+      user_id: job.data.user_id,
       count: count, //200 is max
       max_id: last_id
     });
@@ -43,11 +47,11 @@ jobs.process('download all favorites', 5, function(job, done) {
         //normalize (render) favorites
         newlist = render(body);
         //store in redis
-        saveFavorites(job.data.user_id, newlist);
+        db.set(job.data.user_id, newlist);
         last_id = body[body.length-1].id_str;
         job.progress(job.data.total_count - remaining, job.data.total_count);
         if (remaining === 0) done();
-        else get(user_id, remaining, last_id);
+        else get(remaining, last_id);
       } else {
         e = err ? err : body.errors[0].message;
         done(new Error(e));
@@ -56,6 +60,19 @@ jobs.process('download all favorites', 5, function(job, done) {
   }
 });
 
+/*
+* format the response from couch
+* @doc: json response from couch
+* returns cleaned up js object
+*/
+function format(doc) {
+  try {
+    var d = JSON.parse(doc);
+    return d.rows;
+  } catch (e) {
+    return new Error(e.message);
+  }
+}
 /*
 * normalize array of favorites only include items that are valuable
 * @list: array of favorites
@@ -118,27 +135,6 @@ function redsindex(s, ary, user_id) {
       });
     }
   });
-}
-
-/*
-*  Save favorites to redis
-*  @id: user id
-*  @favs: array of favorires
-*/
-function saveFavorites(id, favs) {
-  var args;
-
-  if (id) {
-    favs.forEach(function(item) {
-      args = [
-        'favorites:'+id,
-        item.id_str,
-        JSON.stringify(item)];
-      rclient.zadd(args, function (e, v) {
-        if (e) console.log('Error with saving favorites to redis from worker, ZADD: ', e);
-      });
-    });
-  }
 }
 
 process.on('disconnect', function() {
