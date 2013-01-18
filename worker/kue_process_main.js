@@ -13,32 +13,52 @@ require('console-trace');
 jobs.process('download all favorites', 5, function(job, done) {
   console.t.log('Kue child has began processing for: ', job.data.user_id);
   var s = reds.createSearch('searchindex:'+job.data.user_id);
-  var couch_obj = {
-    startkey: [job.data.user_id],
-    endkey: [job.data.user_id, {}],
-    descending: false,
-    limit: 1
-  };
-  //get the oldest favorite
-  db._db.view('favorites/by_user_id', couch_obj, function(err, doc) {
-    doc = format(doc);
-    if (doc.length > 0) {
-      get(job.data.total_count, doc[0].value.id_str);
-    }
-  });
-//TODO: add logic to handle API quotas and limits
-  function get(total_count, last_id) {
+  var couch_obj;
+  
+  if (job.data.end_id && job.data.start_id) {
+    get(200, job.data.start_id, job.data.end_id);
+  } else  {
+    couch_obj = {
+      startkey: [job.data.user_id],
+      endkey: [job.data.user_id, {}],
+      descending: false,
+      limit: 1
+    };
+    //get the oldest favorite
+    db._db.view('favorites/by_user_id', couch_obj, function(err, doc) {
+      doc = format(doc);
+      if (doc.length > 0) {
+        get(job.data.total_count, doc[0].value.id_str);
+      }
+    });
+  }
+
+  /*
+  * function that will be called recursively to retreive all favorites
+  * @total_count: the total count of favorites to get.  decreases with iterations
+  * @last_id: the last id retreived
+  */
+  //TODO: add logic to handle API quotas and limits
+  function get(total_count, start_id, end_id) {
     console.t.log('Child GET for ', job.data.user_id, ' and count: ', total_count);
     var count = (total_count < 200) ? ((total_count > 0) ? total_count : 0) : 200
     var remaining = total_count - count;
+    var u = base_url + '/favorites/list.json?';
 
-    var u = base_url + '/favorites/list.json?' +
-    qs.stringify({
-      user_id: job.data.user_id,
-      count: count, //200 is max
-      max_id: last_id
-    });
-
+    if (end_id) {
+      u += qs.stringify({
+        user_id: job.data.user_id,
+        count: count,
+        since_id: start_id,  //more recent than
+        max_id: end_id  //older than
+      });
+    } else {
+      u += qs.stringify({
+        user_id: job.data.user_id,
+        count: count, //200 is max
+        max_id: start_id
+      });
+    }
     r.get({url: u, oauth: job.data.session.oauth, json: true}, function(err, resp, body) {
       var newlist, e;
       if (!err && resp.statusCode === 200 && !body.error) {
@@ -48,17 +68,18 @@ jobs.process('download all favorites', 5, function(job, done) {
         newlist = render(body);
         //store in redis
         db.set(job.data.user_id, newlist);
-        last_id = body[body.length-1].id_str;
-        job.progress(job.data.total_count - remaining, job.data.total_count);
+        start_id = body[body.length-1].id_str;
+        job.progress(remaining, job.data.total_count);
         if (remaining === 0) done();
-        else get(remaining, last_id);
+        else get(remaining, start_id, end_id);
       } else {
         e = err ? err : body.errors[0].message;
         done(new Error(e));
       }
     });
-  }
 });
+
+/**************************************************************************************/
 
 /*
 * format the response from couch
