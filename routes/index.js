@@ -98,12 +98,12 @@ exports.routes = {
 							} else {
 								console.t.log('ids didnt match, save from api')
 								save_cb(null, api_favs);
-								jobs.create('download range', {
+								jobs.create('download all favorites', {
 									session: req.session,
 									user_id: user_id,
 									total_count: req.session.user.favourites_count,
-									db_since_id: current_favs[0].id_str,
-									api_since_id: api_favs[0].id_str
+									start_id: current_favs[0].id_str,
+									end_id: api_favs[api_favs.length-1].id_str
 								}).save();
 							}
 						} else if (err2 || api_favs.length === 0) {
