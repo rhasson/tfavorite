@@ -12,8 +12,6 @@ var r = require('request'),
 		util = require('util'),
 		reds = require('reds'),
 		kue = require('kue'),
-		redis = require('redis'),
-		rclient = redis.createClient(),
 		jobs = kue.createQueue(),
 		cache = {};
 
@@ -174,8 +172,7 @@ exports.routes = {
 	logout: function(req, res, next) {
 		cache[req.session.user.id_str] = null;
 		req.session = null;
-		rclient.quit();
-		res.redirect('/');
+		res.render('home', {user: ''});
 	},
 	get_favorites: function(req, res, next) {
 		/*getFavorites(req.session.user.id_str, req.query, function(err, data){
@@ -356,6 +353,7 @@ function removeFavorites(req, id, cb) {
 		u = config.twitter.base_url + '/favorites/destroy.json';
 		r.post({url: u, oauth: sess.oauth, body: 'id='+id, json: true}, function(err, resp, body) {
 			if (!err && resp.statusCode === 200) {
+				db.del(sess.user,id_str, id);
 				return cb(null, body);
 			} else {
 				if (err) return cb(err);
