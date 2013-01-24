@@ -58,4 +58,4 @@ ws.installHandlers(ws_server, {prefix: '/ws'});
 
 ws_server.listen(80); //8002
 
-//proc.startWorker();
+proc.startWorker();
