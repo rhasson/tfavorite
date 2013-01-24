@@ -11,7 +11,7 @@ var redis = require('redis'),
 require('console-trace');
 
 jobs.process('download all favorites', 5, function(job, done) {
-  console.t.log('Kue child has began processing for: ', job.data.user_id);
+  console.t.log('Kue child has began processing for: ', job.data);
   var s = reds.createSearch('searchindex:'+job.data.user_id);
   var couch_obj;
   
@@ -29,6 +29,8 @@ jobs.process('download all favorites', 5, function(job, done) {
       doc = format(doc);
       if (doc.length > 0) {
         get(job.data.total_count, doc[0].value.id_str);
+      } else {
+        get(job.data.total_count);
       }
     });
   }
@@ -52,13 +54,20 @@ jobs.process('download all favorites', 5, function(job, done) {
         since_id: start_id,  //more recent than
         max_id: end_id  //older than
       });
-    } else {
+    } else if (start_id) {
       u += qs.stringify({
         user_id: job.data.user_id,
         count: count, //200 is max
         max_id: start_id
       });
+    } else {
+      u += qs.stringify({
+        user_id: job.data.user_id,
+        count: count //200 is max
+      });
     }
+
+    console.t.log('Child GETTING: ', start_id, end_id, count)
     r.get({url: u, oauth: job.data.session.oauth, json: true}, function(err, resp, body) {
       var newlist, e;
       if (!err && resp.statusCode === 200 && !body.error) {
@@ -77,6 +86,7 @@ jobs.process('download all favorites', 5, function(job, done) {
         done(new Error(e));
       }
     });
+  }
 });
 
 /**************************************************************************************/
@@ -89,7 +99,8 @@ jobs.process('download all favorites', 5, function(job, done) {
 function format(doc) {
   try {
     var d = JSON.parse(doc);
-    return d.rows;
+    console.t.log('rows: ', d);
+    return d;
   } catch (e) {
     return new Error(e.message);
   }
