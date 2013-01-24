@@ -95,40 +95,54 @@ exports.routes = {
 								cb(null, current_favs);
 							} else {
 								console.t.log('ids didnt match, save from api')
-								save_cb(null, api_favs);
-								jobs.create('download all favorites', {
-									session: req.session,
-									user_id: user_id,
-									total_count: req.session.user.favourites_count,
-									start_id: current_favs[0].id_str,
-									end_id: api_favs[api_favs.length-1].id_str
-								}).save();
+/*								save_cb(null, api_favs, function(err3) {
+									if (!err3) {
+										jobs.create('download all favorites', {
+											session: req.session,
+											user_id: user_id,
+											total_count: req.session.user.favourites_count,
+											start_id: current_favs[0].id_str,
+											end_id: api_favs[api_favs.length-1].id_str
+										}).save();
+										render_cb(null);
+									}
+								});
+*/
+								render_cb(null);
 							}
 						} else if (err2 || api_favs.length === 0) {
 							cb(null, current_favs);
 						}
 					});
-				} else if (err || current_favs.length === 0) {
-					getFromApi(req.session, save_cb);
+				} else {
+					getFromApi(req.session, function(err, api_favs) {
+						console.t.log('nothing found, saving from api and loading the rest')
+						if (!err && api_favs.length) {
+							save_cb(null, api_favs, function(err2) {
+								if (!err2) {
+									jobs.create('download all favorites', {
+										session: req.session,
+										user_id: user_id,
+										start_id: api_favs[api_favs.length-1].id_str,
+										total_count: req.session.user.favourites_count - api_favs.length
+									}).save();
+									render_cb(null);
+								}
+							});
+						}
+
+					});
 				}
-				db.count(user_id, function(e, count) {
-					if (count < req.session.user.favourites_count) {
-						jobs.create('download all favorites', {
-							session: req.session,
-							user_id: req.session.user.id_str,
-							total_count: req.session.user.favourites_count,
-						}).save();
-					}
-				})
 			});
 		}
 
 		/* save in db after rendering but before redirecting */
-		function save_cb(s_err, list) {
+		function save_cb(s_err, list, cb) {
 			if (!s_err) {
 				redsindex(list, req.session.user.id_str);
 				render(list, function(e, favs) {
-					db.set(req.session.user.id_str, favs, render_cb);
+					var c = (typeof cb === 'function') ? cb : render_cb;
+					db.set(req.session.user.id_str, favs, c);
 				});
 			}
 		}
@@ -145,9 +159,11 @@ exports.routes = {
 
 		/* format the favorites to make only needed fields available to client */
 		function render_cb(r_err, favs) {
-			if (!r_err) {
+			res.redirect('/');
+/*			if (!r_err) {
 				res.redirect('/');
 			} else res.redirect('/logout');
+*/
 		}
 	}, 
 	twitter_login: function(req, res, next) {
