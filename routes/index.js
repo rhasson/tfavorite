@@ -95,20 +95,18 @@ exports.routes = {
 								cb(null, current_favs);
 							} else {
 								console.t.log('ids didnt match, save from api')
-/*								save_cb(null, api_favs, function(err3) {
+								save_cb(null, api_favs, function(err3) {
 									if (!err3) {
 										jobs.create('download all favorites', {
 											session: req.session,
 											user_id: user_id,
 											total_count: req.session.user.favourites_count,
 											start_id: current_favs[0].id_str,
-											end_id: api_favs[api_favs.length-1].id_str
+											end_id: api_favs[0].id_str
 										}).save();
 										render_cb(null);
 									}
 								});
-*/
-								render_cb(null);
 							}
 						} else if (err2 || api_favs.length === 0) {
 							cb(null, current_favs);
