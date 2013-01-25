@@ -16,7 +16,7 @@ jobs.process('download all favorites', 5, function(job, done) {
   var couch_obj;
   
   if (job.data.end_id && job.data.start_id) {
-    get(200, job.data.start_id, job.data.end_id);
+    get(10, job.data.start_id, job.data.end_id);
   } else  {
     couch_obj = {
       startkey: [job.data.user_id],
