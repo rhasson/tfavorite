@@ -1,36 +1,137 @@
-$(document).ready(function() {
-	/*if (Meny) {
-		var meny = Meny.create({
-			menuElement: document.querySelector('.meny'),
-			contentsElement: document.querySelector('.favcontents'),
-			position: 'top',
-			height: 200,
-			width: 260,
-			threshold: 40
-		});
-	}*/
-
-/*	$('.list').freetile({
-		selector: '.el_item'
-	});
-
-	function viewport() {
-		var e = window,
-			a = 'inner';
-		if (!('innerWidth' in window)) {
-			a = 'client';
-			e = document.documentElement || document.body;
-		}
-		return { width : e[ a+'Width' ] , height : e[ a+'Height' ] }
-	}
-	
-	$('.favcontents').innerHeight(viewport().height);
-*/
-});
-
+/* Angular application decliration */
 var FaviousApp = angular.module('FaviousApp', ['FaviousApp.service','ngSanitize']);
 
-FaviousApp.directive('favItem', function(socket, $http, $filter) {
+FaviousApp.controller('favListCtrl', function($scope, socket) {
+	socket.onopen = function() {
+		var pi, ps;
+		var id = $('.user').attr('data-user-id');
+
+		if (!socket.hasToken()) {
+			pi = socket.init(id);
+			pi.then(function(id) {
+				ps = socket.get({
+					action: 'get_favorites',
+					params: {
+						count: 20
+					}
+				});
+				ps.then(function(list) {
+					if (list.status === 'ok') {
+						$scope.list = list.data
+						$('div.loading').remove();
+					}
+				},
+				function(err) {
+					console.log('get favorites error: ', err);
+					$scope.list = [];
+				});
+			},
+			function(err) {
+				console.log('error: ', err);
+			});
+		}
+	}
+
+	$scope.getMore = function(next) {
+		if (socket.hasToken()) {
+			ps = socket.get({
+				action: 'get_favorites',
+				params: {
+					count: 5,
+					offset: next
+				}
+			});
+			ps.then(function(items) {
+				if (items.status === 'ok') $scope.list.concat(items.data);
+			},
+			function(err) {
+				console.log('error', err);
+			});
+		}
+	}
+
+	$scope.removeFav = function(item, evt) {
+		console.log('removing: ', item)
+		var newlist = [];
+		if (item) {
+			if (socket.hasToken()) {
+				var ps = socket.get({
+					action: 'remove_favorite',
+					params: { id: item.fav_id }
+				});
+				ps.then(function(resp) {
+					for(var i=0; i < $scope.list.length; i++) {
+						if ($scope.list[i].fav_id === item.fav_id) $scope.list.splice(i, 1);
+					}
+				},
+				function(err) {
+					console.log('error removing favorite: ', err);
+				});
+			}
+		}
+	}
+
+	$scope.shareFav = function(item, evt) {
+
+	}
+});
+
+/* create a data-fav-body directive to handle the text and links within of the tweet */
+FaviousApp.directive('favBody', function(socket, $filter) {
+
+	var linkFn = function(scope, element, attr) {
+		var urls = scope.item.entities.urls;
+		var ex, u;
+
+		if (urls.length == 0) scope.item.text = $filter('linky')(scope.item.text);
+		//replace t.co urls with display urls
+		for (var i=0; i < urls.length; i++) {
+			ex = new RegExp(urls[i].url);
+			u = '<a href="'+urls[i].url+'" class="fav_link" target="_blank">'+urls[i].display_url+'</a>';
+			scope.item.text = scope.item.text.replace(ex, u);
+		}
+
+		element.append(scope.item.text);
+	}
+
+	return {
+		restrict: 'A',
+		link: linkFn
+	}
+});
+
+/* create a data-fav-item directive which wraps every tweet */
+FaviousApp.directive('favItem', function(socket, $filter) {
+
+	var itemTpl = 
+		"<div class='profile_pic media'>" +
+		  "<a class='pull-left' href='#'>" +
+		    "<img class='img-polaroid img-rounded media-object' ng-src='{{item.user.pic}}'>" +
+		  "</a>" +
+		  "<div class='profile_header media-body'>" +
+		    "<span class='profile_header_label'><h5>@{{item.user.screen_name}}</h5></span>" +
+		    "<span class='profile_header_label'><h6>{{item.user.name}}</h6></span>" +
+		  "</div>" +
+		"</div>" + //div.profile_pic
+		"<div class='text_data media'>" +
+		  "<div><div class='text_body' data-fav-body></div></div>" +
+		  "<div class='extended-media embeded_closed hide'>" +
+		    "<div class='embeded' ng-bind-html-unsafe='embeded_data.html'></div>" +
+		    "<div class='media_desc'>" +
+		      "<span class='media_label'>" +
+		        "<h5>{{embeded_data.title}}</h5>" +
+		        "<a href='{{embeded_data.author_url}}' target='_blank'><h6>{{embeded_data.author_name}}</h6></a>" +
+		      "</span>" + //span.media_label
+		    "</div>" + //div.media_desc
+		  "</div>" + //div.extended_media
+		"</div>" + //div.text_data
+		"<div class='actions row'>" +
+		  "<div class='actionlinks_container pull-right'>" +
+		  "<a class='actionlinks' href='#' ng-click='removeFav(item, event)'><h6>Remove</h6></a>" +
+		  "<a class='actionlinks' href='#' ng-click='shareFav(item, event)'><h6>Share</h6></a>" +
+		  "</div>" + //div.actionlinks_container
+		"</div>"; //div.action
+
 	var linkFn = function(scope, element, attr) {
 		//setup event handler
 		var root_el = $(element[0]),
@@ -87,87 +188,11 @@ FaviousApp.directive('favItem', function(socket, $http, $filter) {
 
 	return {
 		restrict: 'A',
+		template: itemTpl,
 		link: linkFn
 	}
 });
 
-
-FaviousApp.directive('favBody', function(socket, $filter) {
-
-	var linkFn = function(scope, element, attr) {
-		var urls = scope.item.entities.urls;
-		var ex, u;
-
-		if (urls.length == 0) scope.item.text = $filter('linky')(scope.item.text);
-		//replace t.co urls with display urls
-		for (var i=0; i < urls.length; i++) {
-			ex = new RegExp(urls[i].url);
-			u = '<a ng-href="'+urls[i].url+'" class="fav_link" target="_blank">'+urls[i].display_url+'</a>';
-			scope.item.text = scope.item.text.replace(ex, u);
-		}
-
-		element.append(scope.item.text);
-	}
-
-	return {
-		restrict: 'A',
-		link: linkFn
-	}
-});
-
-
-function favListCtrl($scope, socket) {
-	socket.onopen = function() {
-		var pi, ps;
-		var id = $('.user').attr('data-user-id');
-
-		if (!socket.hasToken()) {
-			pi = socket.init(id);
-			pi.then(function(id) {
-				ps = socket.get({
-					action: 'get_favorites',
-					params: {
-						count: 20
-					}
-				});
-				ps.then(function(list) {
-					if (list.status == 'ok') {
-						$scope.list = list.data
-						$('div.loading').remove();
-					}
-				},
-				function(err) {
-					console.log('get favorites error: ', err);
-					$scope.list = [];
-				});
-			},
-			function(err) {
-				console.log('error: ', err);
-			});
-		}
-	}
-
-	$scope.removeFav = function(item, evt) {
-		console.log('removing: ', item)
-		var newlist = [];
-		if (item) {
-			if (socket.hasToken()) {
-				var ps = socket.get({
-					action: 'remove_favorite',
-					params: { id: item.fav_id }
-				});
-				ps.then(function(resp) {
-					for(var i=0; i < $scope.list.length; i++) {
-						if ($scope.list[i].fav_id === item.fav_id) $scope.list.splice(i, 1);
-					}
-				},
-				function(err) {
-					console.log('error removing favorite: ', err);
-				})
-			}
-		}
-	}
-}
 
 function slide (el) {
 	if ($(el).hasClass('embeded_opened')) {
