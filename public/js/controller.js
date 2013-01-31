@@ -139,21 +139,27 @@ FaviousApp.directive('favItem', function(socket, $filter) {
 			media_el = $(root_el).find('div.extended-media'),
 			embed_el = $(root_el).find('div.embeded'),
 			flag = false,
+			ex = /vimeo|youtu/ig,
+			u = '',
 			ps;
 
 		$(click_el).on('click', function(evt) {
 			var urls = scope.item.entities.urls;
 			//TODO: handle multiple urls where urls variable is an array
-			if (urls.expanded_url.indexOf('instagr.am') !== -1) {
-				scope.embeded_data = { url: urls.expanded_url + '/media/?size=m' };
-				if (!$(embed_el).children('img').length) {
-					$(embed_el).append('<img src="'+scope.embeded_data.url+'" class="img-polaroid">');
-					$(embed_el).children('img').on('load', function() {
-						$(embed_el).css('width', $(this).width());
-						$(embed_el).children('img').off('load');
-					});
+			angular.forEach(urls, function(url_item, key) {
+				if (url_item.expanded_url.indexOf('instagr.am') !== -1) {
+					scope.embeded_data = { url: url_item.expanded_url + '/media/?size=m' };
+					if (!$(embed_el).children('img').length) {
+						$(embed_el).append('<img src="'+scope.embeded_data.url+'" class="img-polaroid">');
+						$(embed_el).children('img').on('load', function() {
+							$(embed_el).css('width', $(this).width());
+							$(embed_el).children('img').off('load');
+						});
+					}
+				} else if (url_item.expanded_url.match(ex)) {
+					u = url_item.expanded_url;
 				}
-			}
+			});
 
 			if (!flag) {
 				if (socket.hasToken()) {
@@ -161,7 +167,7 @@ FaviousApp.directive('favItem', function(socket, $filter) {
 						action: 'get_embed',
 						params: {
 							id: scope.item.fav_id,
-							url: urls.expanded_url,
+							url: u,
 							maxwidth: $(click_el).width() - 10
 						}
 					});
@@ -181,9 +187,9 @@ FaviousApp.directive('favItem', function(socket, $filter) {
 			//$(media_el).slideToggle('fast');
 			//$(media_el).toggleClass('hide');
 			slide(media_el);
+			//do dirty check to update Angular
+			//scope.$digest();
 		});
-		//do dirty check to update Angular
-		//scope.$digest();
 	}
 
 	return {
@@ -195,6 +201,7 @@ FaviousApp.directive('favItem', function(socket, $filter) {
 
 
 function slide (el) {
+	console.log('inside slide', el)
 	if ($(el).hasClass('embeded_opened')) {
 		$(el).removeClass('embeded_opened');
 		$(el).addClass('embeded_closed');
