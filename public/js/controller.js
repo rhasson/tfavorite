@@ -145,50 +145,53 @@ FaviousApp.directive('favItem', function(socket, $filter) {
 
 		$(click_el).on('click', function(evt) {
 			var urls = scope.item.entities.urls;
-			//TODO: handle multiple urls where urls variable is an array
-			angular.forEach(urls, function(url_item, key) {
-				if (url_item.expanded_url.indexOf('instagr.am') !== -1) {
-					scope.embeded_data = { url: url_item.expanded_url + '/media/?size=m' };
-					if (!$(embed_el).children('img').length) {
-						$(embed_el).append('<img src="'+scope.embeded_data.url+'" class="img-polaroid">');
-						$(embed_el).children('img').on('load', function() {
-							$(embed_el).css('width', $(this).width());
-							$(embed_el).children('img').off('load');
+			
+			if (isDivOpen(media_el)) {
+				slide(media_el);
+			} else if ($(embed_el).children().length > 0) {
+				slide(media_el);
+			} else {
+				angular.forEach(urls, function(url_item, key) {
+					if (url_item.expanded_url.indexOf('instagr.am') !== -1) {
+						scope.embeded_data = { url: url_item.expanded_url + '/media/?size=m' };
+						if (!$(embed_el).children('img').length) {
+							$(embed_el).append('<img src="'+scope.embeded_data.url+'" class="img-polaroid">');
+							$(embed_el).children('img').on('load', function() {
+								$(embed_el).css('width', $(this).width());
+								$(embed_el).children('img').off('load');
+							});
+						}
+						u = url_item.expanded_url;
+					} else if (url_item.expanded_url.match(ex)) {
+						u = url_item.expanded_url;
+					}
+				});
+
+				if (u) {
+					if (socket.hasToken()) {
+						ps = socket.get({
+							action: 'get_embed',
+							params: {
+								id: scope.item.fav_id,
+								url: u,
+								maxwidth: $(click_el).width() - 10
+							}
+						});
+						ps.then(function(resp) {
+							if (resp.status == 'ok') {
+								$(embed_el).css('width', resp.data.width+10);
+								scope.embeded_data = resp.data;
+								slide(media_el);
+								flag = true;
+							}
+						},
+						function(err) {
+							console.log('Failed to get details for this tweet');
+							flag = false;
 						});
 					}
-				} else if (url_item.expanded_url.match(ex)) {
-					u = url_item.expanded_url;
 				}
-			});
-
-			if (!flag) {
-				if (socket.hasToken()) {
-					ps = socket.get({
-						action: 'get_embed',
-						params: {
-							id: scope.item.fav_id,
-							url: u,
-							maxwidth: $(click_el).width() - 10
-						}
-					});
-					ps.then(function(resp) {
-						if (resp.status == 'ok') {
-							$(embed_el).css('width', resp.data.width+10);
-							scope.embeded_data = resp.data;
-							flag = true;
-						}
-					},
-					function(err) {
-						console.log('Failed to get details for this tweet');
-						flag = false;
-					});
-				}			
-			} 
-			//$(media_el).slideToggle('fast');
-			//$(media_el).toggleClass('hide');
-			slide(media_el);
-			//do dirty check to update Angular
-			//scope.$digest();
+			}
 		});
 	}
 
@@ -199,9 +202,12 @@ FaviousApp.directive('favItem', function(socket, $filter) {
 	}
 });
 
+function isDivOpen(el) {
+	if ($(el).hasClass('embeded_opened')) return true;
+	else return false;
+}
 
 function slide (el) {
-	console.log('inside slide', el)
 	if ($(el).hasClass('embeded_opened')) {
 		$(el).removeClass('embeded_opened');
 		$(el).addClass('embeded_closed');
