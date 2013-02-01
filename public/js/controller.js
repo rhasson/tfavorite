@@ -83,6 +83,11 @@ FaviousApp.directive('favBody', function(socket, $filter) {
 		var urls = scope.item.entities.urls;
 		var ex, u;
 
+		if (scope.item.text.match(/<a/ig)) {
+			element.html(scope.item.text);
+			return;
+		}
+
 		if (urls.length == 0) scope.item.text = $filter('linky')(scope.item.text);
 		//replace t.co urls with display urls
 		for (var i=0; i < urls.length; i++) {
@@ -90,47 +95,18 @@ FaviousApp.directive('favBody', function(socket, $filter) {
 			u = '<a href="'+urls[i].url+'" class="fav_link" target="_blank">'+urls[i].display_url+'</a>';
 			scope.item.text = scope.item.text.replace(ex, u);
 		}
-
-		element.append(scope.item.text);
+		element.html(scope.item.text);
 	}
 
 	return {
 		restrict: 'A',
+		templateUrl: 'fav-body',
 		link: linkFn
 	}
 });
 
 /* create a data-fav-item directive which wraps every tweet */
 FaviousApp.directive('favItem', function(socket, $filter) {
-
-	var itemTpl = 
-		"<div class='profile_pic media'>" +
-		  "<a class='pull-left' href='#'>" +
-		    "<img class='img-polaroid img-rounded media-object' ng-src='{{item.user.pic}}'>" +
-		  "</a>" +
-		  "<div class='profile_header media-body'>" +
-		    "<span class='profile_header_label'><h5>@{{item.user.screen_name}}</h5></span>" +
-		    "<span class='profile_header_label'><h6>{{item.user.name}}</h6></span>" +
-		  "</div>" +
-		"</div>" + //div.profile_pic
-		"<div class='text_data media'>" +
-		  "<div><div class='text_body' data-fav-body></div></div>" +
-		  "<div class='extended-media embeded_closed hide'>" +
-		    "<div class='embeded' ng-bind-html-unsafe='embeded_data.html'></div>" +
-		    "<div class='media_desc'>" +
-		      "<span class='media_label'>" +
-		        "<h5>{{embeded_data.title}}</h5>" +
-		        "<a href='{{embeded_data.author_url}}' target='_blank'><h6>{{embeded_data.author_name}}</h6></a>" +
-		      "</span>" + //span.media_label
-		    "</div>" + //div.media_desc
-		  "</div>" + //div.extended_media
-		"</div>" + //div.text_data
-		"<div class='actions row'>" +
-		  "<div class='actionlinks_container pull-right'>" +
-		  "<a class='actionlinks' href='#' ng-click='removeFav(item, event)'><h6>Remove</h6></a>" +
-		  "<a class='actionlinks' href='#' ng-click='shareFav(item, event)'><h6>Share</h6></a>" +
-		  "</div>" + //div.actionlinks_container
-		"</div>"; //div.action
 
 	var linkFn = function(scope, element, attr) {
 		//setup event handler
@@ -197,7 +173,7 @@ FaviousApp.directive('favItem', function(socket, $filter) {
 
 	return {
 		restrict: 'A',
-		template: itemTpl,
+		templateUrl: 'fav-item',
 		link: linkFn
 	}
 });

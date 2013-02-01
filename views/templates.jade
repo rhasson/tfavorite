@@ -1,0 +1,23 @@
+script(type='text/ng-template', id='fav-body')
+  p {{item.text}}
+
+script(type='text/ng-template', id='fav-item')
+  div.profile_pic.media
+    a.pull-left(href='#')
+      img.img-polaroid.img-rounded.media-object(ng-src='{{item.user.pic}}')
+    div.profile_header.media-body
+      span.profile_header_label: h5 @{{item.user.screen_name}}
+      span.profile_header_label: h6 ({{item.user.name}})
+  div.text_data.media
+    div
+      div.text_body(data-fav-body)
+    div.extended-media.hide.embeded_closed
+      div.embeded(ng-bind-html-unsafe='embeded_data.html')
+      div.media_desc
+        span.media_label
+          h5 {{embeded_data.title}}
+          a(href='{{embeded_data.author_url}}', target='_blank'): h6 {{embeded_data.author_name}}
+  div.actions.row
+    div.actionlinks_container.pull-right
+      a.actionlinks(href='#', ng-click='removeFav(item, event)'): h6 Remove
+      a.actionlinks(href='#', ng-click='shareFav(item, event)'): h6 Share
