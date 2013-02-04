@@ -38,7 +38,7 @@ FaviousApp.controller('favListCtrl', function($scope, socket) {
 				action: 'get_favorites',
 				params: {
 					count: 5,
-					offset: next
+					start_id: next
 				}
 			});
 			ps.then(function(items) {
@@ -118,6 +118,12 @@ FaviousApp.directive('favItem', function(socket, $filter) {
 			ex = /vimeo|youtu/ig,
 			u = '',
 			ps;
+
+		$(root_el).on('scroll', function(evt) {
+			if (root_el.scrollTop + root_el.offsetHeight >= root_el.scrollHeight) {
+                scope.$apply(getMore());
+            }
+		});
 
 		$(click_el).on('click', function(evt) {
 			var urls = scope.item.entities.urls;

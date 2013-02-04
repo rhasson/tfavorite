@@ -253,20 +253,37 @@ exports.wsroutes = {
 					if (id) {
 						sess = cache[id];
 						resp_msg.token = data.token;
-						db.get(sess.user.id_str, data.params, function(err, resp) {
-							if (!err) {
-								resp_msg.status = 'ok';
-								resp_msg.data = resp;
-								/*d = JSON.stringify(resp_msg);
-								d = d.slice(0, d.length-1);
-								d += ', "data": '+resp+'}';*/
-								socket.write(JSON.stringify(resp_msg));
-							} else {
-								resp_msg.status = 'error';
-								resp_msg.error = err.message;
-								socket.write(JSON.stringify(resp_msg));
-							}
-						});
+						if (data.params.start_id || data.params.end_id) {
+							db.get_by_id(sess.user.id_str, data.params, function(err, resp) {
+								if (!err) {
+									var temp_id = data.params.start_id || data.params.end_id;
+									resp_msg.status = 'ok';
+									resp_msg.data = resp.filter(function(i) {
+										if (i.id_str !== temp_id) return true;
+									});
+									socket.write(JSON.stringify(resp_msg));
+								} else {
+									resp_msg.status = 'error';
+									resp_msg.error = err.message;
+									socket.write(JSON.stringify(resp_msg));
+								}
+							});
+						} else {
+							db.get(sess.user.id_str, data.params, function(err, resp) {
+								if (!err) {
+									resp_msg.status = 'ok';
+									resp_msg.data = resp;
+									/*d = JSON.stringify(resp_msg);
+									d = d.slice(0, d.length-1);
+									d += ', "data": '+resp+'}';*/
+									socket.write(JSON.stringify(resp_msg));
+								} else {
+									resp_msg.status = 'error';
+									resp_msg.error = err.message;
+									socket.write(JSON.stringify(resp_msg));
+								}
+							});
+						}
 					}
 				}
 				break;
