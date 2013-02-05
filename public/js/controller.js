@@ -1,7 +1,18 @@
 /* Angular application decliration */
 var FaviousApp = angular.module('FaviousApp', ['FaviousApp.service','ngSanitize']);
 
-FaviousApp.controller('favListCtrl', function($scope, socket) {
+FaviousApp.scrollFlag = false;
+
+FaviousApp.controller('favListCtrl', function($scope, $timeout, socket) {
+
+	$(window).on('scroll', function() {
+		var trigger = 0.95;
+		if (!FaviousApp.scrollFlag && $(window).scrollTop() / ( $(document).height() - $(window).height() ) > trigger) {
+			$scope.getMore($scope.list[$scope.list.length - 1].id_str);
+			FaviousApp.scrollFlag = true;
+		}
+	});
+
 	socket.onopen = function() {
 		var pi, ps;
 		var id = $('.user').attr('data-user-id');
@@ -33,6 +44,7 @@ FaviousApp.controller('favListCtrl', function($scope, socket) {
 	}
 
 	$scope.getMore = function(next) {
+		var self = this;
 		if (socket.hasToken()) {
 			ps = socket.get({
 				action: 'get_favorites',
@@ -42,7 +54,10 @@ FaviousApp.controller('favListCtrl', function($scope, socket) {
 				}
 			});
 			ps.then(function(items) {
-				if (items.status === 'ok') $scope.list.concat(items.data);
+				if (items.status === 'ok') {
+					$scope.list = $scope.list.concat(items.data);
+					FaviousApp.scrollFlag = false;
+				}
 			},
 			function(err) {
 				console.log('error', err);
@@ -118,12 +133,6 @@ FaviousApp.directive('favItem', function(socket, $filter) {
 			ex = /vimeo|youtu/ig,
 			u = '',
 			ps;
-
-		$(root_el).on('scroll', function(evt) {
-			if (root_el.scrollTop + root_el.offsetHeight >= root_el.scrollHeight) {
-                scope.$apply(getMore());
-            }
-		});
 
 		$(click_el).on('click', function(evt) {
 			var urls = scope.item.entities.urls;
