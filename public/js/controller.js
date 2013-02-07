@@ -193,6 +193,23 @@ FaviousApp.directive('favItem', function(socket, $filter) {
 	}
 });
 
+FaviousApp.filter('search', function() {
+	return function(ary, query) {
+		var newary = [];
+		query = query ? query.toLowerCase() : query;
+		if (!(ary instanceof Array)) return ary;
+
+		console.log('array length: ', ary.length)
+		
+		newary = ary.filter(function(el) {
+			return (el.text.toLowerCase().indexOf(query) > -1)
+		});
+	
+		if (newary.length > 0) return newary
+		else return ary;
+	}
+});
+
 function isDivOpen(el) {
 	if ($(el).hasClass('embeded_opened')) return true;
 	else return false;
