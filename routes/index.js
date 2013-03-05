@@ -325,6 +325,8 @@ exports.wsroutes = {
 					}
 				}
 				break;
+			case 'search':
+				break;
 		}
 	}
 }
