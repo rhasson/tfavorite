@@ -10,7 +10,6 @@ var r = require('request'),
 		db = require('../lib/db'),
 		url = require('url'),
 		util = require('util'),
-		reds = require('reds'),
 		kue = require('kue'),
 		jobs = kue.createQueue(),
 		cache = {};
