@@ -11,6 +11,7 @@ var r = require('request'),
 		url = require('url'),
 		util = require('util'),
 		kue = require('kue'),
+		search = require('../lib/search.js'),
 		jobs = kue.createQueue(),
 		cache = {};
 
@@ -307,7 +308,7 @@ exports.wsroutes = {
 				break;
 			case 'remove_favorite':
 				if (data.token) {
-					id = cache[data.token]
+					id = cache[data.token];
 					if (id) {
 						sess = cache[id];
 						resp_msg.token = data.token;
@@ -325,6 +326,30 @@ exports.wsroutes = {
 				}
 				break;
 			case 'search':
+				console.log('SEARCH GOT: ', data)
+				if (data.token) {
+					id = cache[data.token];
+					if (id) {
+						sess = cache[id];
+						sess.search = sess.search || new search(sess.user.id_str);
+						resp_msg.token = data.token;
+						sess.search.query(data.params.q, function(e, ids) {
+							console.log('SEARCH: ', ids)
+							if (!e) {
+								db.get_multi(sess.user.id_str, ids, function(e, resp) {
+									if (!e) {
+										resp_msg.status = 'ok';	
+										resp_msg.data = resp;
+									} else {
+										resp_msg.status = 'error';	
+										resp_msg.data = 'Search failed - ' + e;
+									}
+									return socket.write(JSON.stringify(resp_msg));
+								});
+							}
+						});
+					}
+				}
 				break;
 		}
 	}
@@ -478,7 +503,7 @@ function render(list, cb) {
 * @user_id: user id of the logged in user
 */
 function redsindex(ary, user_id) {
-	var s = reds.createSearch('searchindex:'+user_id);
+	var s = new search(user_id, {load: false});
 	ary.forEach(function(item, i) {
 		s.index(item.text, item.id_str);
 		s.index(item.user.name, item.id_str);
