@@ -193,9 +193,30 @@ FaviousApp.directive('favItem', function(socket, $filter) {
 	}
 });
 
-FaviousApp.filter('search', function() {
+FaviousApp.filter('lookup', function(socket) {
 	return function(ary, query) {
-		var newary = [];
+		if (!(ary instanceof Array)) return ary;
+
+		if (!query) return ary;
+		else if (socket.hasToken()) {
+			console.log('CLIENT SENDING: ',query)
+			ps = socket.get({
+				action: 'search',
+				params: {
+					q: query
+				}
+			});
+			ps.then(function(resp) {
+				if (resp.status == 'ok') {
+					return resp.data;
+				}
+			},
+			function(err) {
+				console.log('Failed to get search results');
+			});
+		}
+
+/*		var newary = [];
 		query = query ? query.toLowerCase() : query;
 		if (!(ary instanceof Array)) return ary;
 
@@ -207,6 +228,7 @@ FaviousApp.filter('search', function() {
 	
 		if (newary.length > 0) return newary
 		else return ary;
+*/
 	}
 });
 
