@@ -3,7 +3,7 @@ var redis = require('redis'),
   kue = require('kue'),
   jobs = kue.createQueue(),
   qs = require('querystring'),
-  reds = require('reds'),
+  search = require('../lib/search.js'),
   r = require('request'),
   db = require('../lib/db'),
   base_url = require('../config').config.twitter.base_url;
@@ -12,7 +12,7 @@ require('console-trace');
 
 jobs.process('download all favorites', 5, function(job, done) {
   console.t.log('Kue child has began processing for: ', job.data);
-  var s = reds.createSearch('searchindex:'+job.data.user_id);
+  var s = new search(job.data.user_id, {load: false});
   var couch_obj;
   
   if (job.data.end_id && job.data.start_id) {
