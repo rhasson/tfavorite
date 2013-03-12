@@ -326,7 +326,6 @@ exports.wsroutes = {
 				}
 				break;
 			case 'search':
-				console.log('SEARCH GOT: ', data)
 				if (data.token) {
 					id = cache[data.token];
 					if (id) {
@@ -334,7 +333,6 @@ exports.wsroutes = {
 						sess.search = sess.search || new search(sess.user.id_str);
 						resp_msg.token = data.token;
 						sess.search.query(data.params.q, function(e, ids) {
-							console.log('SEARCH: ', ids)
 							if (!e) {
 								db.get_multi(sess.user.id_str, ids, function(e, resp) {
 									if (!e) {
@@ -344,7 +342,8 @@ exports.wsroutes = {
 										resp_msg.status = 'error';	
 										resp_msg.data = 'Search failed - ' + e;
 									}
-									return socket.write(JSON.stringify(resp_msg));
+									console.log('SOCKET SEND: ', resp_msg.status)
+									socket.write(JSON.stringify(resp_msg));
 								});
 							}
 						});

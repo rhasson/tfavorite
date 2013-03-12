@@ -20,7 +20,7 @@ angular.module('FaviousApp.service', []).
 				try { r = JSON.parse(resp.data); }
 				catch (e) { return cb(new Error(e));	}
 console.log('send onmessage: ', r);
-				if (!r.error) {
+				if (!r.error && r.status !== 'error') {
 					if (root.ws_token == r.token) {
 						//remove the token parameter before returning back to user
 						for (var i in r) {
@@ -43,9 +43,9 @@ console.log('send onmessage: ', r);
 
 			sock.send(req, function(err, resp) {
 				root.$apply(function() {
-					if (!err) {
+					if (!err && resp.status !== 'error') {
 						deferred.resolve(resp);
-					} else deferred.reject(err);
+					} else deferred.reject(err || resp.data);
 				});
 			});
 			return deferred.promise;

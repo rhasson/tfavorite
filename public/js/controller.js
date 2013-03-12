@@ -194,6 +194,7 @@ FaviousApp.directive('favItem', function(socket, $filter) {
 });
 
 FaviousApp.filter('lookup', function(socket) {
+	console.log('CALLING LOOKUP')
 	return function(ary, query) {
 		if (!(ary instanceof Array)) return ary;
 
@@ -207,14 +208,17 @@ FaviousApp.filter('lookup', function(socket) {
 				}
 			});
 			ps.then(function(resp) {
+				console.log('THEN: ', resp)
 				if (resp.status == 'ok') {
 					return resp.data;
-				}
+				} else return [];
 			},
 			function(err) {
 				console.log('Failed to get search results');
+				return [];
 			});
 		}
+		return [];
 
 /*		var newary = [];
 		query = query ? query.toLowerCase() : query;
