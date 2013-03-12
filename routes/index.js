@@ -342,7 +342,6 @@ exports.wsroutes = {
 										resp_msg.status = 'error';	
 										resp_msg.data = 'Search failed - ' + e;
 									}
-									console.log('SOCKET SEND: ', resp_msg.status)
 									socket.write(JSON.stringify(resp_msg));
 								});
 							}
