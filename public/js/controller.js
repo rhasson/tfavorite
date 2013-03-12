@@ -4,6 +4,29 @@ var FaviousApp = angular.module('FaviousApp', ['FaviousApp.service','ngSanitize'
 FaviousApp.scrollFlag = false;
 
 FaviousApp.controller('favListCtrl', function($scope, $timeout, socket) {
+	var old_list;
+
+	$scope.$watch('query', function(query, oldval) {
+		if (query !== '' && socket.hasToken()) {
+			console.log('CLIENT SENDING: ',query)
+			ps = socket.get({
+				action: 'search',
+				params: {
+					q: query
+				}
+			});
+			ps.then(function(resp) {
+				if (resp.status == 'ok') {
+					$scope.list = resp.data;
+				} else $scope.list = [];
+			},
+			function(err) {
+				console.log('Failed to get search results');
+				$scope.list = [];
+			});
+		} else $scope.list = old_list;
+	});
+
 
 	$(window).on('scroll', function() {
 		var trigger = 0.95;
@@ -29,6 +52,7 @@ FaviousApp.controller('favListCtrl', function($scope, $timeout, socket) {
 				ps.then(function(list) {
 					if (list.status === 'ok') {
 						$scope.list = list.data
+						old_list = list.data;
 						$('div.loading').remove();
 					}
 				},
@@ -190,49 +214,6 @@ FaviousApp.directive('favItem', function(socket, $filter) {
 		restrict: 'A',
 		templateUrl: 'fav-item',
 		link: linkFn
-	}
-});
-
-FaviousApp.filter('lookup', function(socket) {
-	console.log('CALLING LOOKUP')
-	return function(ary, query) {
-		if (!(ary instanceof Array)) return ary;
-
-		if (!query) return ary;
-		else if (socket.hasToken()) {
-			console.log('CLIENT SENDING: ',query)
-			ps = socket.get({
-				action: 'search',
-				params: {
-					q: query
-				}
-			});
-			ps.then(function(resp) {
-				console.log('THEN: ', resp)
-				if (resp.status == 'ok') {
-					return resp.data;
-				} else return [];
-			},
-			function(err) {
-				console.log('Failed to get search results');
-				return [];
-			});
-		}
-		return [];
-
-/*		var newary = [];
-		query = query ? query.toLowerCase() : query;
-		if (!(ary instanceof Array)) return ary;
-
-		console.log('array length: ', ary.length)
-		
-		newary = ary.filter(function(el) {
-			return (el.text.toLowerCase().indexOf(query) > -1)
-		});
-	
-		if (newary.length > 0) return newary
-		else return ary;
-*/
 	}
 });
 
