@@ -16,5 +16,5 @@
     "cradle": "~0.6.4",
     "natural": "~0.1.19"
   },
-  "engine": "node 0.8"
+  "engine": ">=node 0.8"
 }
