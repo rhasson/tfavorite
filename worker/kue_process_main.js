@@ -11,7 +11,7 @@ var redis = require('redis'),
 require('console-trace');
 
 jobs.process('download all favorites', 5, function(job, done) {
-  console.t.log('Kue child has began processing for: ', job.data);
+  console..log('Kue child has began processing for: ', job.data);
   var s = new search(job.data.user_id, {load: false});
   var couch_obj;
   
@@ -42,7 +42,7 @@ jobs.process('download all favorites', 5, function(job, done) {
   */
   //TODO: add logic to handle API quotas and limits
   function get(total_count, start_id, end_id) {
-    console.t.log('Child GET for ', job.data.user_id, ' and count: ', total_count);
+    console..log('Child GET for ', job.data.user_id, ' and count: ', total_count);
     var count = (total_count < 200) ? ((total_count > 0) ? total_count : 0) : 200
     var remaining = total_count - count;
     var u = base_url + '/favorites/list.json?';
@@ -67,7 +67,7 @@ jobs.process('download all favorites', 5, function(job, done) {
       });
     }
 
-    console.t.log('Child GETTING: ', start_id, end_id, count)
+    console..log('Child GETTING: ', start_id, end_id, count)
     r.get({url: u, oauth: job.data.session.oauth, json: true}, function(err, resp, body) {
       var newlist, e;
       if (!err && resp.statusCode === 200 && !body.error) {
@@ -99,7 +99,7 @@ jobs.process('download all favorites', 5, function(job, done) {
 function format(doc) {
   try {
     var d = JSON.parse(doc);
-    console.t.log('rows: ', d);
+    console..log('rows: ', d);
     return d;
   } catch (e) {
     return new Error(e.message);
