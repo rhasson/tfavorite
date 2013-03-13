@@ -184,7 +184,7 @@ exports.routes = {
 		});
 	},
 	logout: function(req, res, next) {
-		cache[req.session.user.id_str] = null;
+		if (req.session && req.session.user) cache[req.session.user.id_str] = null;
 		req.session = null;
 		res.render('home', {user: ''});
 	},
