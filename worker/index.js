@@ -2,7 +2,7 @@ var fork = require('child_process').fork;
 var proc = null;
 
 exports.startWorker = function() {
-  proc = fork(process.cwd() + '/worker/kue_process_main.js');
+  proc = fork(__dirname + '/kue_process_main.js');
 
   proc.on('error', function(err) {
     console.log('Kue child process ', proc.pid, ' failed with error: ', err);
