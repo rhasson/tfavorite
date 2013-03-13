@@ -91,10 +91,10 @@ exports.routes = {
 					getFromApi(req.session, function(err2, api_favs) {
 						if (!err2 && api_favs.length) {
 							if (current_favs[0].id_str === api_favs[0].id_str) {
-								console..log('ids match, return from db')
+								console.log('ids match, return from db')
 								cb(null, current_favs);
 							} else {
-								console..log('ids didnt match, save from api')
+								console.log('ids didnt match, save from api')
 								save_cb(null, api_favs, function(err3) {
 									if (!err3) {
 										jobs.create('download all favorites', {
@@ -114,7 +114,7 @@ exports.routes = {
 					});
 				} else {
 					getFromApi(req.session, function(err, api_favs) {
-						console..log('nothing found, saving from api and loading the rest')
+						console.log('nothing found, saving from api and loading the rest')
 						if (!err && api_favs.length) {
 							save_cb(null, api_favs, function(err2) {
 								if (!err2) {
@@ -180,7 +180,7 @@ exports.routes = {
 					config.twitter.base_url.substr(0, config.twitter.base_url.length-4) + 
 					'/oauth/authenticate?' + 
 					qs.stringify({oauth_token: req.session.access_token.oauth_token}));
-			} else console..log(body);
+			} else console.log(body);
 		});
 	},
 	logout: function(req, res, next) {
