@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "private": false,
   "dependencies": {
-    "request": "2.16.0",
+    "request": "2.16.2",
     "express": "3.0.2",
     "jade": "0.27.7",
     "sockjs": "0.3.4",
