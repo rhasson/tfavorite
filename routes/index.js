@@ -332,20 +332,22 @@ exports.wsroutes = {
 						sess = cache[id];
 						sess.search = sess.search || new search(sess.user.id_str);
 						resp_msg.token = data.token;
-						sess.search.query(data.params.q, function(e, ids) {
-							if (!e) {
-								db.get_multi(sess.user.id_str, ids, function(e, resp) {
-									if (!e) {
-										resp_msg.status = 'ok';	
-										resp_msg.data = resp;
-									} else {
-										resp_msg.status = 'error';	
-										resp_msg.data = 'Search failed - ' + e;
-									}
-									socket.write(JSON.stringify(resp_msg));
-								});
-							}
-						});
+						if (data.params.q && data.params.q.length) {
+							sess.search.query(data.params.q, function(e, ids) {
+								if (!e) {
+									db.get_multi(sess.user.id_str, ids, function(e, resp) {
+										if (!e) {
+											resp_msg.status = 'ok';	
+											resp_msg.data = resp;
+										} else {
+											resp_msg.status = 'error';	
+											resp_msg.data = 'Search failed - ' + e;
+										}
+										socket.write(JSON.stringify(resp_msg));
+									});
+								}
+							});
+						}
 					}
 				}
 				break;
