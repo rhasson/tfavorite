@@ -4,33 +4,43 @@ var FaviousApp = angular.module('FaviousApp', ['FaviousApp.service','ngSanitize'
 FaviousApp.scrollFlag = false;
 
 FaviousApp.controller('favListCtrl', function($scope, $timeout, socket) {
-	var old_list;
+	var old_list, interval=null, searching=false;
 
 	$scope.$watch('query', function(query, oldval) {
-		if (query !== '' && socket.hasToken()) {
-			console.log('CLIENT SENDING: ',query)
-			ps = socket.get({
-				action: 'search',
-				params: {
-					q: query
+		if ((query !== '' || query !== ' ') && query.length > 0 && socket.hasToken()) {
+			searching = true;
+			window.clearTimeout(interval);
+			interval = window.setTimeout(function() {
+				if (query !== '' || query !== ' ') {
+					console.log('CLIENT SENDING: ',query)
+					ps = socket.get({
+						action: 'search',
+						params: {
+							q: query
+						}
+					});
+					ps.then(function(resp) {
+						if (resp.status == 'ok') {
+							$scope.list = resp.data;
+						} else $scope.list = [];
+					},
+					function(err) {
+						console.log('Failed to get search results');
+						$scope.list = old_list;
+					});
 				}
-			});
-			ps.then(function(resp) {
-				if (resp.status == 'ok') {
-					$scope.list = resp.data;
-				} else $scope.list = [];
-			},
-			function(err) {
-				console.log('Failed to get search results');
-				$scope.list = [];
-			});
-		} else $scope.list = old_list;
+			}, 200);
+		} else {
+			window.clearTimeout(interval);
+			$scope.list = old_list;
+			searching = false;
+		}
 	});
 
 
 	$(window).on('scroll', function() {
 		var trigger = 0.95;
-		if (!FaviousApp.scrollFlag && $(window).scrollTop() / ( $(document).height() - $(window).height() ) > trigger) {
+		if (!searching && !FaviousApp.scrollFlag && $(window).scrollTop() / ( $(document).height() - $(window).height() ) > trigger) {
 			$scope.getMore($scope.list[$scope.list.length - 1].id_str);
 			FaviousApp.scrollFlag = true;
 		}
