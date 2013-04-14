@@ -3,19 +3,18 @@
 *	v.0.0.1
 */
 
-var r = require('request'),
-		qs = require('querystring'),
-		crypto = require('crypto'),
-		config = require('../config').config,
-		db = require('../lib/db'),
-		url = require('url'),
-		util = require('util'),
-		kue = require('kue'),
-		search = require('../lib/search.js'),
-		jobs = kue.createQueue(),
-		cache = {};
-
-require('console-trace');
+var r = require('request')
+		, qs = require('querystring')
+		, crypto = require('crypto')
+		, config = require('../config').config
+		, db = require('../lib/db')
+		, url = require('url')
+		, util = require('util')
+		, kue = require('kue')
+		, search = require('../lib/search.js')
+		, jobs = kue.createQueue()
+		, cache = {}
+		, queries = [];
 
 /*
 *  Basic HTTP routes handled by Express
@@ -163,7 +162,8 @@ exports.routes = {
 			} else res.redirect('/logout');
 */
 		}
-	}, 
+	},
+
 	twitter_login: function(req, res, next) {
 		var oauth = {
 			callback: config.home_url + config.twitter.callback,
@@ -183,11 +183,13 @@ exports.routes = {
 			} else console.log(body);
 		});
 	},
+
 	logout: function(req, res, next) {
 		if (req.session && req.session.user) cache[req.session.user.id_str] = null;
 		req.session = null;
 		res.render('home', {user: ''});
 	},
+
 	get_favorites: function(req, res, next) {
 		/*getFavorites(req.session.user.id_str, req.query, function(err, data){
 			if (!err) res.json(list);
@@ -195,6 +197,7 @@ exports.routes = {
 		});*/
 		next();
 	},
+
 	get_embed: function(req, res, next) {
 		var o = {
 			id: req.params.id,
@@ -205,6 +208,7 @@ exports.routes = {
 			else next();
 		});
 	},
+
 	remove: function(req, res, next) {
 		removeFavorite(req, req.params.id, function(err, resp) {
 			if (!err) {
@@ -214,143 +218,140 @@ exports.routes = {
 			}
 		});
 	}
-}
+};
 
 /*
 *  WebSockets command parsing and routing
 */
 exports.wsroutes = {
-	parse: function(msg, socket) {
-		var data, resp, sess, id, resp_msg = {}, d;
-		
-		try { data = JSON.parse(msg); }
-		catch (e) { console.log(e); }
-		
-		switch (data.action) {
-			case 'init':
-				sess = cache[data.id];  //get session given the user id
-				if (sess) {
-					crypto.randomBytes(128, function(e, b){
-						if (!e) {
-							resp = {
-								status: 'ok',
-								data: {	token: b.toString('base64') }
-							};
-							cache[resp.data.token] = data.id;  //save the ws session id with the user id
+	init: function(msg, socket) {
+		var resp_msg = {};
+		if (socket.handshake.sid) {
+			crypto.randomBytes(128, function(e, b){
+				if (!e) {
+					resp_msg.status = 'ok';
+					resp_msg.data = { token: b.toString('base64') };
+					cache[resp_msg.data.token] = socket.handshake.sid;  //save the ws session id with the user id
+				} else {
+					resp_msg.status = 'error';
+					resp_msg.error = 'failed to create session token';
+				}
+				return socket.emit('init', resp_msg);
+			});
+		}
+	},
+	
+	get_favorites: function(msg, socket) {
+		var user_id = '', sid = '', resp_msg = {};
+		console.log('MSG: ',msg)
+
+		if (msg.token) {
+			sid = cache[msg.token];
+			if (sid === socket.handshake.sid) {
+				user_id = socket.handshake.user_id;
+				resp_msg.token = msg.token;
+				if (msg.params.start_id || msg.params.end_id) {
+					db.get_by_id(user_id, msg.params, function(err, resp) {
+						if (!err) {
+							var temp_id = msg.params.start_id || msg.params.end_id;
+							resp_msg.status = 'ok';
+							resp_msg.data = resp.filter(function(i) {
+								if (i.id_str !== temp_id) return true;
+							});
+							socket.emit('get_favorites', resp_msg);
 						} else {
-							resp = {
-								status: 'error',
-								error: 'failed to create session token'
-							}
+							resp_msg.status = 'error';
+							resp_msg.error = err.message;
+							socket.write('get_favorites', resp_msg);
 						}
-						return socket.write(JSON.stringify(resp));
+					});
+				} else {
+					db.get(user_id, msg.params, function(err, resp) {
+						if (!err) {
+							resp_msg.status = 'ok';
+							resp_msg.data = resp;
+							/*d = JSON.stringify(resp_msg);
+							d = d.slice(0, d.length-1);
+							d += ', "data": '+resp+'}';*/
+							socket.emit('get_favorites', resp_msg);
+						} else {
+							resp_msg.status = 'error';
+							resp_msg.error = err.message;
+							socket.write('get_favorites', resp_msg);
+						}
 					});
 				}
-				break;
-			case 'get_favorites':
-				if (data.token) {
-					id = cache[data.token];
-					if (id) {
-						sess = cache[id];
-						resp_msg.token = data.token;
-						if (data.params.start_id || data.params.end_id) {
-							db.get_by_id(sess.user.id_str, data.params, function(err, resp) {
-								if (!err) {
-									var temp_id = data.params.start_id || data.params.end_id;
-									resp_msg.status = 'ok';
-									resp_msg.data = resp.filter(function(i) {
-										if (i.id_str !== temp_id) return true;
-									});
-									socket.write(JSON.stringify(resp_msg));
-								} else {
-									resp_msg.status = 'error';
-									resp_msg.error = err.message;
-									socket.write(JSON.stringify(resp_msg));
-								}
-							});
-						} else {
-							db.get(sess.user.id_str, data.params, function(err, resp) {
-								if (!err) {
-									resp_msg.status = 'ok';
-									resp_msg.data = resp;
-									/*d = JSON.stringify(resp_msg);
-									d = d.slice(0, d.length-1);
-									d += ', "data": '+resp+'}';*/
-									socket.write(JSON.stringify(resp_msg));
-								} else {
-									resp_msg.status = 'error';
-									resp_msg.error = err.message;
-									socket.write(JSON.stringify(resp_msg));
-								}
-							});
-						}
+			}
+		}
+	},
+
+	get_embed: function(msg, socket) {
+		var sid = '', resp_msg = {};
+		if (msg.token) {
+			sid = cache[msg.token];
+			if (sid === socket.handshake.sid) {
+				resp_msg.token = msg.token;
+				getEmbededMedia(msg.params, function(err, resp) {
+					if (!err) {
+						resp_msg.status = 'ok';
+						resp_msg.data = resp;
+					} else {
+						resp_msg.status = 'error';
+						resp_msg.error = err.message;
 					}
-				}
-				break;
-			case 'get_embed':
-				if (data.token) {
-					id = cache[data.token];
-					if (id) {
-						sess = cache[id];
-						resp_msg.token = data.token;
-						getEmbededMedia(data.params, function(err, resp) {
-							if (!err) {
-								resp_msg.status = 'ok';
-								resp_msg.data = resp;
-							} else {
-								resp_msg.status = 'error';
-								resp_msg.error = err.message;
-							}
-							socket.write(JSON.stringify(resp_msg));
-						});
+					socket.emit('get_embed', resp_msg);
+				});
+			}
+		}
+	},
+	
+	remove_favorite: function(msg, socket) {
+		var sid = '', user_id = '', resp_msg = {};
+		if (msg.token) {
+			sid = cache[msg.token];
+			if (sid === socket.handshake.sid) {
+				user_id = socket.handshake.user_id;
+				resp_msg.token = msg.token;
+				removeFavorites(user_id, msg.params.id, function(err, resp) {
+					if (!err) {
+						resp_msg.status = 'ok';
+						resp_msg.data = resp;
+					} else {
+						resp_msg.status = 'error';
+						resp_msg.error = err.message;
 					}
-				}
-				break;
-			case 'remove_favorite':
-				if (data.token) {
-					id = cache[data.token];
-					if (id) {
-						sess = cache[id];
-						resp_msg.token = data.token;
-						removeFavorites(sess, data.params.id, function(err, resp) {
-							if (!err) {
-								resp_msg.status = 'ok';
-								resp_msg.data = resp;
-							} else {
-								resp_msg.status = 'error';
-								resp_msg.error = err.message;
-							}
-							socket.write(JSON.stringify(resp_msg));
-						});
-					}
-				}
-				break;
-			case 'search':
-				if (data.token) {
-					id = cache[data.token];
-					if (id) {
-						sess = cache[id];
-						sess.search = sess.search || new search(sess.user.id_str);
-						resp_msg.token = data.token;
-						if (data.params.q && data.params.q.length) {
-							sess.search.query(data.params.q, function(e, ids) {
+					socket.emit('remove_favorite', resp_msg);
+				});
+			}
+		}
+	},
+
+	search: function(msg, socket) {
+		var sid = '', user_id = '', resp_msg = {}, q;
+		if (msg.token) {
+			sid = cache[msg.token];
+			if (sid === socket.handshake.sid) {
+				user_id = socket.handshake.user_id;
+				if (queries['_'+user_id]) q = queries['_'+user_id];
+				else q = queries['_'+user_id] = new search(user_id);
+				resp_msg.token = msg.token;
+				if (msg.params.q && msg.params.q.length) {
+					q.query(msg.params.q, function(e, ids) {
+						if (!e) {
+							db.get_multi(user_id, ids, function(e, resp) {
 								if (!e) {
-									db.get_multi(sess.user.id_str, ids, function(e, resp) {
-										if (!e) {
-											resp_msg.status = 'ok';	
-											resp_msg.data = resp;
-										} else {
-											resp_msg.status = 'error';	
-											resp_msg.data = 'Search failed - ' + e;
-										}
-										socket.write(JSON.stringify(resp_msg));
-									});
+									resp_msg.status = 'ok';	
+									resp_msg.data = resp;
+								} else {
+									resp_msg.status = 'error';	
+									resp_msg.data = 'Search failed - ' + e;
 								}
+								socket.emit('search', resp_msg);
 							});
 						}
-					}
+					});
 				}
-				break;
+			}
 		}
 	}
 }
@@ -395,12 +396,13 @@ function getFromApi(req, params, cb) {
 
 /*
 *  Remove a favorite given it's id
-*  @req: session object
+*  @user_id: user id
 *  @id: favorite id from Twitter
 */
-function removeFavorites(req, id, cb) {
+function removeFavorites(user_id, id, cb) {
+	return cb(null, null);
 	var u;
-	var sess = req.session || req;
+	var sess = ''; /* TODO: need to get session object for oauth info */
 
 	if (typeof id === 'fuction') {
 		cd = id;

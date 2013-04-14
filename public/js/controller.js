@@ -7,7 +7,7 @@ FaviousApp.controller('favListCtrl', function($scope, $timeout, socket) {
 	var old_list, interval=null, searching=false;
 
 	$scope.$watch('query', function(query, oldval) {
-		if ((query !== '' || query !== ' ') && query.length > 0 && socket.hasToken()) {
+		if ((query !== undefined && query !== '' && query !== ' ') && socket.hasToken()) {
 			searching = true;
 			window.clearTimeout(interval);
 			interval = window.setTimeout(function() {
@@ -45,37 +45,6 @@ FaviousApp.controller('favListCtrl', function($scope, $timeout, socket) {
 			FaviousApp.scrollFlag = true;
 		}
 	});
-
-	socket.onopen = function() {
-		var pi, ps;
-		var id = $('.user').attr('data-user-id');
-
-		if (!socket.hasToken()) {
-			pi = socket.init(id);
-			pi.then(function(id) {
-				ps = socket.get({
-					action: 'get_favorites',
-					params: {
-						count: 20
-					}
-				});
-				ps.then(function(list) {
-					if (list.status === 'ok') {
-						$scope.list = list.data
-						old_list = list.data;
-						$('div.loading').remove();
-					}
-				},
-				function(err) {
-					console.log('get favorites error: ', err);
-					$scope.list = [];
-				});
-			},
-			function(err) {
-				console.log('error: ', err);
-			});
-		}
-	}
 
 	$scope.getMore = function(next) {
 		var self = this;
@@ -123,6 +92,39 @@ FaviousApp.controller('favListCtrl', function($scope, $timeout, socket) {
 	$scope.shareFav = function(item, evt) {
 
 	}
+
+	function init() {
+		var pi, ps;
+		var id = $('.user').attr('data-user-id');
+
+		if (!socket.hasToken()) {
+			pi = socket.init(id);
+			pi.then(function(id) {
+				ps = socket.get({
+					action: 'get_favorites',
+					params: {
+						count: 20
+					}
+				});
+				ps.then(function(list) {
+					if (list.status === 'ok') {
+						$scope.list = list.data
+						old_list = list.data;
+						$('div.loading').remove();
+					}
+				},
+				function(err) {
+					console.log('get favorites error: ', err);
+					$scope.list = [];
+				});
+			},
+			function(err) {
+				console.log('error: ', err);
+			});
+		}
+	};
+	init();
+
 });
 
 /* create a data-fav-body directive to handle the text and links within of the tweet */

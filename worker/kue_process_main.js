@@ -7,8 +7,6 @@ var redis = require('redis'),
   r = require('request'),
   db = require('../lib/db'),
   base_url = require('../config').config.twitter.base_url;
-  
-require('console-trace');
 
 jobs.process('download all favorites', 5, function(job, done) {
   console.log('Kue child has began processing for: ', job.data);

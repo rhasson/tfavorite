@@ -1,6 +1,6 @@
 angular.module('FaviousApp.service', []).
 	factory('socket', ['$rootScope', '$q', function(root, q) {
-		var sock = new SockJS('http://favio.us/ws');
+		var sock = io.connect('http://favio.us');
 		var old_send = sock.send;
 		
 		/*
@@ -10,11 +10,25 @@ angular.module('FaviousApp.service', []).
 		*  @data.token: session token (will not be present with 'init' message)
 		*/
 		sock.__proto__.send = function(data, cb) {
-			var d;
 
 			if (!root.ws_token && (!data.action || data.action != 'init')) return cb(new Error('Must first initialize the socket transport'));
 			else if (data.action != 'init' && !data.token) data.token = root.ws_token;
+console.log('SENDING: ', data)
+			sock.on(data.action, function(r) {
+				var a = [];
+				if (!r.error && r.status !== 'error') {
+					if (root.ws_token === r.token) {
+						//remove the token parameter before returning back to user
+						for (var i in r) {
+							if (i !== 'token') a[i] = r[i];
+						}
+						return cb(null, a);
+					} else return cb(new Error('Unauthorized request'));
+				} else return cb(new Error(r.error));
+			});
 
+			sock.emit(data.action, data);
+/*
 			sock.onmessage = function(resp) {
 				var r, a = {};
 				try { r = JSON.parse(resp.data); }
@@ -35,6 +49,7 @@ console.log('send onmessage: ', r);
 			catch (e) { return cb(new Error(e)); }
 
 			old_send.call(sock, d);
+*/
 		}
 
 		sock.__proto__.get = function(req) {
@@ -55,17 +70,10 @@ console.log('send onmessage: ', r);
 			var deferred = q.defer()
 			var old = null;
 			console.log('token: ', root.ws_token);
-			root.$apply(function() {
+			//root.$apply(function() {
 				if (!id) deferred.reject('Missing a user id');
 				if (!root.ws_token) {
 					console.log('Sending: ', id)
-	/*				if (typeof sock.onmessage == 'function') old = sock.onmessage;
-					sock.onmessage = function(resp) {
-
-						sock.onmessage = old;
-						if (typeof sock.onmesage == 'funtion') sock.onmesage.call(resp);
-					}
-	*/
 					sock.send({action: 'init', id: id}, function(err, resp) {
 						root.$apply(function() {
 							console.log('INIT RESP: ', err, resp);
@@ -81,7 +89,7 @@ console.log('send onmessage: ', r);
 						});
 					});
 				} else deferred.resolve('ok');
-			});
+			//});
 			return deferred.promise;
 		}
 		
@@ -90,7 +98,7 @@ console.log('send onmessage: ', r);
 			else return false;
 		}
 		sock.__proto__.isToken = function(t) {
-			if (root.ws_token == t) return true;
+			if (root.ws_token === t) return true;
 			else return false;
 		}
 
