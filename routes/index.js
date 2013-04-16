@@ -312,10 +312,10 @@ exports.wsroutes = {
 			if (sid === socket.handshake.sid) {
 				user_id = socket.handshake.user_id;
 				resp_msg.token = msg.token;
-				removeFavorites(user_id, msg.params.id, function(err, resp) {
+				removeFavorites(user_id, socket.handshake.oauth, msg.params.id, function(err, resp) {
 					if (!err) {
 						resp_msg.status = 'ok';
-						resp_msg.data = resp;
+						resp_msg.data = null;
 					} else {
 						resp_msg.status = 'error';
 						resp_msg.error = err.message;
@@ -399,21 +399,20 @@ function getFromApi(req, params, cb) {
 *  @user_id: user id
 *  @id: favorite id from Twitter
 */
-function removeFavorites(user_id, id, cb) {
-	return cb(null, null);
+function removeFavorites(user_id, oauth, id, cb) {
 	var u;
-	var sess = ''; /* TODO: need to get session object for oauth info */
 
 	if (typeof id === 'fuction') {
 		cd = id;
 		return cb(new Error('missing id'));
 	}
-	if (sess) {
+	if (user_id) {
 		u = config.twitter.base_url + '/favorites/destroy.json';
-		r.post({url: u, oauth: sess.oauth, body: 'id='+id, json: true}, function(err, resp, body) {
+		r.post({url: u, oauth: oauth, body: 'id='+id, json: true}, function(err, resp, body) {
 			if (!err && resp.statusCode === 200) {
-				db.del(sess.user,id_str, id);
-				return cb(null, body);
+				db.del(user_id, id, function(e) {
+					return cb(e, body);
+				});
 			} else {
 				if (err) return cb(err);
 				else if (err instanceof Error) return cb(new Error(err));

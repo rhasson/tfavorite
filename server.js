@@ -48,6 +48,7 @@ ws.set('authorization', function(data, next) {
         if (!err && session) {
           data.sid = c.sid;
           data.user_id = session.user.id_str;
+          data.oauth = session.oauth;
           next(null, true);
         } else next('Failed to get session from store', false);
       });

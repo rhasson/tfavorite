@@ -75,11 +75,11 @@ FaviousApp.controller('favListCtrl', function($scope, $timeout, socket) {
 			if (socket.hasToken()) {
 				var ps = socket.get({
 					action: 'remove_favorite',
-					params: { id: item.fav_id }
+					params: { id: item.id_str }
 				});
 				ps.then(function(resp) {
 					for(var i=0; i < $scope.list.length; i++) {
-						if ($scope.list[i].fav_id === item.fav_id) $scope.list.splice(i, 1);
+						if ($scope.list[i].id_str === item.id_str) $scope.list.splice(i, 1);
 					}
 				},
 				function(err) {
