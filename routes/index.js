@@ -250,6 +250,9 @@ exports.wsroutes = {
 			if (sid === socket.handshake.sid) {
 				user_id = socket.handshake.user_id;
 				resp_msg.token = msg.token;
+
+				if (!queries['_'+user_id]) queries['_'+user_id] = new search(user_id);
+
 				if (msg.params.start_id || msg.params.end_id) {
 					db.get_by_id(user_id, msg.params, function(err, resp) {
 						if (!err) {
@@ -333,7 +336,11 @@ exports.wsroutes = {
 			if (sid === socket.handshake.sid) {
 				user_id = socket.handshake.user_id;
 				if (queries['_'+user_id]) q = queries['_'+user_id];
-				else q = queries['_'+user_id] = new search(user_id);
+				else {
+					resp_msg.status = 'error';
+					resp_msg.data = 'Search failed - could not retreive search index';
+					return socket.emit('search', resp_msg);
+				}
 				resp_msg.token = msg.token;
 				if (msg.params.q && msg.params.q.length) {
 					q.query(msg.params.q, function(e, ids) {
@@ -346,7 +353,7 @@ exports.wsroutes = {
 									resp_msg.status = 'error';	
 									resp_msg.data = 'Search failed - ' + e;
 								}
-								socket.emit('search', resp_msg);
+								return socket.emit('search', resp_msg);
 							});
 						}
 					});
