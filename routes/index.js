@@ -347,8 +347,9 @@ exports.wsroutes = {
 						if (!e) {
 							db.get_multi(user_id, ids, function(e, resp) {
 								if (!e) {
-									resp_msg.status = 'ok';	
-									resp_msg.data = resp;
+									resp_msg.status = 'ok';
+									resp_msg.data = q.sortBy(resp, 'created_at', 'date_desc');
+									//resp_msg.data = resp;
 								} else {
 									resp_msg.status = 'error';	
 									resp_msg.data = 'Search failed - ' + e;

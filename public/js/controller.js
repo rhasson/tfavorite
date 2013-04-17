@@ -29,7 +29,7 @@ FaviousApp.controller('favListCtrl', function($scope, $timeout, socket) {
 						$scope.list = old_list;
 					});
 				}
-			}, 200);
+			}, 300);
 		} else {
 			window.clearTimeout(interval);
 			$scope.list = old_list;
