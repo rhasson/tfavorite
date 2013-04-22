@@ -1,7 +1,7 @@
 {
   "name": "tfavorite",
   "author": "roy hasson",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "private": false,
   "dependencies": {
     "request": "2.16.2",
@@ -13,7 +13,7 @@
     "kue": "~0.5.0",
     "cradle": "~0.6.4",
     "natural": "~0.1.19",
-    "socket.io": "~0.9.14"
+    "q": "~0.9.3"
   },
   "engine": ">=node 0.8"
 }

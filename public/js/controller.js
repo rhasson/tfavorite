@@ -1,33 +1,24 @@
 /* Angular application decliration */
-var FaviousApp = angular.module('FaviousApp', ['FaviousApp.service','ngSanitize']);
+var FaviousApp = angular.module('FaviousApp', 
+	['FaviousApp.services.Favorites'
+		, 'FaviousApp.services.Embeds'
+		, 'FaviousApp.services.Search'
+		,'ngSanitize'
+	]);
 
 FaviousApp.scrollFlag = false;
 
-FaviousApp.controller('favListCtrl', function($scope, $timeout, socket) {
+FaviousApp.controller('favListCtrl', function($scope, $timeout, res_favorites, res_embeds, res_search) {
 	var old_list, interval=null, searching=false;
 
 	$scope.$watch('query', function(query, oldval) {
-		if ((query !== undefined && query !== '' && query !== ' ') && socket.hasToken()) {
+		if (query !== undefined && query !== '' && query !== ' ') {
 			searching = true;
 			window.clearTimeout(interval);
 			interval = window.setTimeout(function() {
 				if (query !== '' || query !== ' ') {
 					console.log('CLIENT SENDING: ',query)
-					ps = socket.get({
-						action: 'search',
-						params: {
-							q: query
-						}
-					});
-					ps.then(function(resp) {
-						if (resp.status == 'ok') {
-							$scope.list = resp.data;
-						} else $scope.list = [];
-					},
-					function(err) {
-						console.log('Failed to get search results');
-						$scope.list = old_list;
-					});
+					$scope.list = res_search.query({q: query});
 				}
 			}, 300);
 		} else {
@@ -49,42 +40,21 @@ FaviousApp.controller('favListCtrl', function($scope, $timeout, socket) {
 	$scope.getMore = function(next) {
 		var self = this;
 		if (socket.hasToken()) {
-			ps = socket.get({
-				action: 'get_favorites',
-				params: {
-					count: 5,
-					start_id: next
-				}
-			});
-			ps.then(function(items) {
-				if (items.status === 'ok') {
-					$scope.list = $scope.list.concat(items.data);
-					FaviousApp.scrollFlag = false;
-				}
-			},
-			function(err) {
-				console.log('error', err);
-			});
+			ps = res_favorites.query({id: next, count: 5});
+			$scope.list = $scope.list.concat(ps);
+			FaviousApp.scrollFlag = false;
 		}
 	}
 
 	$scope.removeFav = function(item, evt) {
 		console.log('removing: ', item)
-		var newlist = [];
+		var newlist = [], ps;
 		if (item) {
 			if (socket.hasToken()) {
-				var ps = socket.get({
-					action: 'remove_favorite',
-					params: { id: item.id_str }
-				});
-				ps.then(function(resp) {
-					for(var i=0; i < $scope.list.length; i++) {
-						if ($scope.list[i].id_str === item.id_str) $scope.list.splice(i, 1);
-					}
-				},
-				function(err) {
-					console.log('error removing favorite: ', err);
-				});
+				ps = res_favorites.remove({id: item.id_str});
+				for(var i=0; i < $scope.list.length; i++) {
+					if ($scope.list[i].id_str === item.id_str) $scope.list.splice(i, 1);
+				}
 			}
 		}
 	}
@@ -97,32 +67,10 @@ FaviousApp.controller('favListCtrl', function($scope, $timeout, socket) {
 		var pi, ps;
 		var id = $('.user').attr('data-user-id');
 
-		if (!socket.hasToken()) {
-			pi = socket.init(id);
-			pi.then(function(id) {
-				ps = socket.get({
-					action: 'get_favorites',
-					params: {
-						count: 20
-					}
-				});
-				ps.then(function(list) {
-					if (list.status === 'ok') {
-						$scope.list = list.data
-						old_list = list.data;
-						$('div.loading').remove();
-					}
-				},
-				function(err) {
-					console.log('get favorites error: ', err);
-					$scope.list = [];
-				});
-			},
-			function(err) {
-				console.log('error: ', err);
-			});
-		}
+		$scope.list = res_favorites.query({count: 20});
+		$('div.loading').remove();
 	};
+
 	init();
 
 });
@@ -157,7 +105,7 @@ FaviousApp.directive('favBody', function(socket, $filter) {
 });
 
 /* create a data-fav-item directive which wraps every tweet */
-FaviousApp.directive('favItem', function(socket, $filter) {
+FaviousApp.directive('favItem', function(red_embeds, $filter) {
 
 	var linkFn = function(scope, element, attr) {
 		//setup event handler
@@ -196,22 +144,16 @@ FaviousApp.directive('favItem', function(socket, $filter) {
 
 				if (u) {
 					if (socket.hasToken()) {
-						ps = socket.get({
-							action: 'get_embed',
-							params: {
-								id: scope.item.fav_id,
-								url: u,
-								maxwidth: $(click_el).width() - 10
-							}
+						ps = res_embeds.get({
+								, id: scope.item.fav_id
+								, url: u
+								, maxwidth: $(click_el).width() - 10
 						});
-						ps.then(function(resp) {
-							if (resp.status == 'ok') {
 								$(embed_el).css('width', resp.data.width+10);
 								scope.embeded_data = resp.data;
 								slide(media_el);
 								flag = true;
-							}
-						},
+						},//TODO: fix this
 						function(err) {
 							console.log('Failed to get details for this tweet');
 							flag = false;
