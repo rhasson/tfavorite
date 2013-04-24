@@ -201,14 +201,15 @@ exports.routes = {
 					resp_msg = resp.filter(function(i) {
 						if (i.id_str !== q.start || i.id_str !== q.end) return true;
 					});
-					res.json({data: resp_msg});
+					res.json(resp_msg);
 				} else {
-					res.json({error: 'Failed to get favorites: ' +err.message});
+					console.log('Failed to get favorites: ' +err.message);
+					res.json([]);
 				}
 			});
 		} else {
 			db.get(user_id, q, function(err, resp) {
-				!err ? res.json({data: resp}) : res.json({error: 'Failed to get favorites: ' +err.message});
+				!err ? res.json(resp) : res.json([]);
 			});
 		}
 
@@ -218,14 +219,18 @@ exports.routes = {
 	/* GET /embed/1212&url='http://....'&maxwidth='200' */
 	get_embed: function(req, res, next) {
 		getEmbededMedia(req.query, function(err, data) {
-			!err ? res.json({data: data}) : res.json({error: 'Failed to get embeded media: ' +err.message});
+			var a = [];
+			a.push(data);
+			!err ? res.json(a) : res.json([]);
 		});
 	},
 
 	/* DELETE /favorite/1212 */
 	remove_favorite: function(req, res, next) {
 		removeFavorite(req.session.oauth, req.params.id, function(err, resp) {
-			!err ? res.json({data: resp}) : res.json({error: 'failed to remove favorite', id: req.params.id});
+			var a = [];
+			a.push(resp);
+			!err ? res.json(a) : res.json([]);
 		});
 	},
 
@@ -234,16 +239,16 @@ exports.routes = {
 		var q, resp_msg;
 
 		if (queries['_'+user_id]) q = queries['_'+user_id];
-		else res.json({error: 'Search failed - could not retreive search index'});
+		else res.json([]);
 
 		if (req.query.q && req.query.q.length) {
 			q.query(req.query.q, function(e, ids) {
 				if (!e) {
 					db.get_multi(user_id, ids, function(e, resp) {
 						if (!e) {
-							resp_msg = {data: q.sortBy(resp, 'created_at', 'date_desc')};
+							resp_msg = q.sortBy(resp, 'created_at', 'date_desc');
 						} else {
-							resp_msg = {error: 'Search failed - ' + e};
+							resp_msg = [];
 						}
 						res.json(resp_msg);
 					});

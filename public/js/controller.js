@@ -38,24 +38,34 @@ FaviousApp.controller('favListCtrl', function($scope, $timeout, res_favorites, r
 	});
 
 	$scope.getMore = function(next) {
-		var self = this;
-		if (socket.hasToken()) {
-			ps = res_favorites.query({id: next, count: 5});
-			$scope.list = $scope.list.concat(ps);
-			FaviousApp.scrollFlag = false;
-		}
+		var self = this, ps;
+		
+		ps = res_favorites.query({
+			  id: next
+			, count: 5
+		}, function() {  //success
+				$scope.list = $scope.list.concat(ps);
+				FaviousApp.scrollFlag = false;
+		}, function() {  //error
+				//TODO: show some simple error message at the bottom of the screen
+		});
 	}
 
 	$scope.removeFav = function(item, evt) {
 		console.log('removing: ', item)
 		var newlist = [], ps;
 		if (item) {
-			if (socket.hasToken()) {
-				ps = res_favorites.remove({id: item.id_str});
-				for(var i=0; i < $scope.list.length; i++) {
-					if ($scope.list[i].id_str === item.id_str) $scope.list.splice(i, 1);
-				}
-			}
+
+				ps = res_favorites.remove({
+					  id: item.id_str
+				}, function() {
+					if (ps.length) {
+						for(var i=0; i < $scope.list.length; i++) {
+							if ($scope.list[i].id_str === item.id_str) $scope.list.splice(i, 1);
+						}
+					} else console.log('Failed to remove favorite: ', item.id_str);
+				});
+
 		}
 	}
 
@@ -67,8 +77,15 @@ FaviousApp.controller('favListCtrl', function($scope, $timeout, res_favorites, r
 		var pi, ps;
 		var id = $('.user').attr('data-user-id');
 
-		$scope.list = res_favorites.query({count: 20});
-		$('div.loading').remove();
+		ps = res_favorites.query({
+			  count: 20
+		}, function() {
+			$scope.list = ps;
+			$('div.loading').remove();
+		}, function() {
+			$('div.loading').html('Cannot reach server at this time, please try again later');
+		});
+		
 	};
 
 	init();
@@ -76,7 +93,7 @@ FaviousApp.controller('favListCtrl', function($scope, $timeout, res_favorites, r
 });
 
 /* create a data-fav-body directive to handle the text and links within of the tweet */
-FaviousApp.directive('favBody', function(socket, $filter) {
+FaviousApp.directive('favBody', function($filter) {
 
 	var linkFn = function(scope, element, attr) {
 		var urls = scope.item.entities.urls;
@@ -143,22 +160,19 @@ FaviousApp.directive('favItem', function(red_embeds, $filter) {
 				});
 
 				if (u) {
-					if (socket.hasToken()) {
-						ps = res_embeds.get({
-								, id: scope.item.fav_id
-								, url: u
-								, maxwidth: $(click_el).width() - 10
-						});
-								$(embed_el).css('width', resp.data.width+10);
-								scope.embeded_data = resp.data;
-								slide(media_el);
-								flag = true;
-						},//TODO: fix this
-						function(err) {
+					ps = res_embeds.get({
+							  id: scope.item.fav_id
+							, url: u
+							, maxwidth: $(click_el).width() - 10
+					}, function() {  //success
+							$(embed_el).css('width', ps.data.width+10);
+							scope.embeded_data = ps.data;
+							slide(media_el);
+							flag = true;
+					}, function() {  //error
 							console.log('Failed to get details for this tweet');
 							flag = false;
-						});
-					}
+					});
 				}
 			}
 		});
