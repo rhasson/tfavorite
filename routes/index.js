@@ -50,7 +50,6 @@ exports.routes = {
 		function postAuth_cb(err, resp, body) {
 			if (!err && resp.statusCode === 200) {
 				req.session.access_token = qs.parse(body);
-				//req.session.access_token.user_id = req.session.access_token.user_id.toString();
 				req.session.oauth = {
 					consumer_key: config.twitter.consumer_key,
 					consumer_secret: config.twitter.consumer_secret,
@@ -59,7 +58,6 @@ exports.routes = {
 				};
 
 				/* save session object to cache */
-				//cache[req.session.access_token.user_id] = req.session;
 				var u = config.twitter.base_url + '/users/show.json?',
 						params = {
 							screen_name: req.session.access_token.screen_name,
@@ -190,39 +188,81 @@ exports.routes = {
 		res.render('home', {user: ''});
 	},
 
-	get_favorites: function(req, res, next) {
-		/*getFavorites(req.session.user.id_str, req.query, function(err, data){
-			if (!err) res.json(list);
-			else next();
-		});*/
-		next();
+	/* GET /favorite/12121?&end='343434' */
+	get_favorite: function(req, res, next) {
+		var user_id = req.session.user.id_str
+			, resp_msg
+			, q = req.query;
+
+		if (req.params.id || q) {
+			q.start = req.params.id;
+			db.get_by_id(user_id, q, function(err, resp) {
+				if (!err) {
+					resp_msg = resp.filter(function(i) {
+						if (i.id_str !== q.start || i.id_str !== q.end) return true;
+					});
+					res.json(resp_msg);
+				} else {
+					console.log('Failed to get favorites: ' +err.message);
+					res.json([]);
+				}
+			});
+		} else {
+			db.get(user_id, q, function(err, resp) {
+				!err ? res.json(resp) : res.json([]);
+			});
+		}
+
+		if (!queries['_'+user_id]) queries['_'+user_id] = new search(user_id);
 	},
 
+	/* GET /embed/1212&url='http://....'&maxwidth='200' */
 	get_embed: function(req, res, next) {
-		var o = {
-			id: req.params.id,
-			url: req.query.url
-		};
-		getEmbededMedia(o, function(err, data) {
-			if (!err) res.json(data);
-			else next();
+		getEmbededMedia(req.query, function(err, data) {
+			var a = [];
+			a.push(data);
+			!err ? res.json(a) : res.json([]);
 		});
 	},
 
-	remove: function(req, res, next) {
-		removeFavorite(req, req.params.id, function(err, resp) {
-			if (!err) {
-				res.json(resp);
-			} else {
-				res.json({Error: 'failed to remove favorite', id: req.params.id});
-			}
+	/* DELETE /favorite/1212 */
+	remove_favorite: function(req, res, next) {
+		removeFavorite(req.session.oauth, req.params.id, function(err, resp) {
+			var a = [];
+			a.push(resp);
+			!err ? res.json(a) : res.json([]);
 		});
+	},
+
+	/* GET /search?q='query string' */
+	search: function(req, res, next) {
+		var q, resp_msg;
+
+		if (queries['_'+user_id]) q = queries['_'+user_id];
+		else res.json([]);
+
+		if (req.query.q && req.query.q.length) {
+			q.query(req.query.q, function(e, ids) {
+				if (!e) {
+					db.get_multi(user_id, ids, function(e, resp) {
+						if (!e) {
+							resp_msg = q.sortBy(resp, 'created_at', 'date_desc');
+						} else {
+							resp_msg = [];
+						}
+						res.json(resp_msg);
+					});
+				}
+			});
+		}
 	}
+
 };
 
 /*
 *  WebSockets command parsing and routing
 */
+/*
 exports.wsroutes = {
 	init: function(msg, socket) {
 		var resp_msg = {};
@@ -273,9 +313,6 @@ exports.wsroutes = {
 						if (!err) {
 							resp_msg.status = 'ok';
 							resp_msg.data = resp;
-							/*d = JSON.stringify(resp_msg);
-							d = d.slice(0, d.length-1);
-							d += ', "data": '+resp+'}';*/
 							socket.emit('get_favorites', resp_msg);
 						} else {
 							resp_msg.status = 'error';
@@ -375,6 +412,7 @@ exports.wsroutes = {
 		}
 	}
 }
+*/
 
 /*
 *  Helper functions
@@ -460,10 +498,10 @@ function sortList(method, list, cb) {
 * @item an object containing favorite id and url to parse
 */
 function getEmbededMedia(item, cb) {
-	var oembed,
-		u = '',
-		host = url.parse(item.url).host,
-			o = {
+	var oembed
+		,	u = ''
+		, host = url.parse(item.url).host
+		,	o = {
 				url: item.url,
 				maxwidth: item.maxwidth//435,
 				//maxheight: 244
