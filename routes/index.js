@@ -343,7 +343,18 @@ exports.wsroutes = {
 				}
 				resp_msg.token = msg.token;
 				if (msg.params.q && msg.params.q.length) {
-					q.query(msg.params.q, function(e, ids) {
+					q.query(msg.params.q).then(function(ids) {
+						db.get_multi(user_id, ids, function(e, resp) {
+							resp_msg.status = 'ok';
+							resp_msg.data = q.sortBy(resp, 'created_at', 'date_desc');
+							return socket.emit('search', resp_msg);
+						});
+					}, function(e) {
+						resp_msg.status = 'error';	
+						resp_msg.data = 'Search failed - ' + e;
+						return socket.emit('search', resp_msg);
+					});
+/*					q.query(msg.params.q, function(e, ids) {
 						if (!e) {
 							db.get_multi(user_id, ids, function(e, resp) {
 								if (!e) {
@@ -358,6 +369,7 @@ exports.wsroutes = {
 							});
 						}
 					});
+*/					
 				}
 			}
 		}
