@@ -12,6 +12,7 @@ var r = require('request')
 		, util = require('util')
 		, kue = require('kue')
 		, search = require('../lib/search.js')
+		, Q = require('q')
 		, jobs = kue.createQueue()
 		, cache = {}
 		, queries = [];
@@ -41,14 +42,41 @@ exports.routes = {
 					//need to remove the version from the api url
 					u = config.twitter.base_url.substr(0, config.twitter.base_url.length-4) + '/oauth/access_token';
 			/* get access token from twitter oauth service */
-			r.post({url: u, oauth: oauth}, postAuth_cb);
+			Q.nfcall(r.post, {url: u, oauth: oauth})
+			.then(function(resp) {
+				/* get user details after auth completes */
+				return postAuthHandler(resp[0].statusCode, resp[0].body);
+			})
+			.then(function(resp) {
+				if (resp[0].statusCode === 200) {
+					req.session.user = resp[0].body;
+					return checkFavorites();
+				} else {
+					throw new Error('Failed to get user details from Twitter');
+				}
+			})
+			.then(function(favlist, saved) {
+				/* index important values from favorite object */
+				Q.fcall(redsindex, favlist, req.session.user.id_str); //verify if this is blocking and should be done async
+				/* format favorite object to pull out only relevant info to send client */
+				Q.fcall(render, favlist)
+				.then(function(newlist) {
+					if (!saved) {
+						db.set(req.session.user.id_str, newlist);
+					}
+					res.redirect('/');
+				});
+			})
+			.fail(function(err) {
+				console.log(err);
+				res.json(err);
+			})
+			.done();
 		}
 
-		/** callback helper functions **/
-
 		/* auth token response */
-		function postAuth_cb(err, resp, body) {
-			if (!err && resp.statusCode === 200) {
+		function postAuthHandler(statusCode, body) {
+			if (statusCode === 200) {
 				req.session.access_token = qs.parse(body);
 				req.session.oauth = {
 					consumer_key: config.twitter.consumer_key,
@@ -65,103 +93,71 @@ exports.routes = {
 						};
 				u += qs.stringify(params);
 				/* get logged in user information and update session object in cache */
-				r.get({url: u, oauth: req.session.oauth, json: true}, getUserInfo_cb);
-			}
-		}
-
-		/* user info from api response */
-		function getUserInfo_cb(err, resp, user) {
-			if (!err && resp.statusCode === 200) {
-				req.session.user = user;
-				cache[req.session.user.id_str] = req.session;
-				checkFavorites(redsIndex_cb);
+				return Q.nfcall(r.get, {url: u, oauth: req.session.oauth, json: true});
+			} else {
+				throw new Error(body);
 			}
 		}
 
 		/* check if new favorites are available since last login */
-		function checkFavorites(cb) {
-			var params = {},
-				user_id = req.session.user.id_str;
+		function checkFavorites() {
+			var params = {}
+			  , user_id = req.session.user.id_str
+			  , deferred = Q.defer();
 
-			db.get(user_id, function(err, current_favs) {
-				if (!err && current_favs.length) {
-					getFromApi(req.session, function(err2, api_favs) {
-						if (!err2 && api_favs.length) {
+			Q.nfcall(db.get, user_id)
+			.then(function(current_favs) {
+				if (current_favs.length) {
+					getFromApi(req.session)
+					.then(function(api_favs) {
+						if (api_favs.length) {
 							if (current_favs[0].id_str === api_favs[0].id_str) {
 								console.log('ids match, return from db')
-								cb(null, current_favs);
+								deferred.resolve(current_favs, true);
 							} else {
 								console.log('ids didnt match, save from api')
-								save_cb(null, api_favs, function(err3) {
-									if (!err3) {
-										jobs.create('download all favorites', {
-											session: req.session,
-											user_id: user_id,
-											total_count: req.session.user.favourites_count,
-											start_id: current_favs[0].id_str,
-											end_id: api_favs[0].id_str
-										}).save();
-										render_cb(null);
-									}
-								});
+								jobs.create('download all favorites', {
+									session: req.session,
+									user_id: user_id,
+									total_count: req.session.user.favourites_count,
+									start_id: current_favs[0].id_str,
+									end_id: api_favs[0].id_str
+								}).save();
+								deferred.resolve(api_favs, false);
 							}
-						} else if (err2 || api_favs.length === 0) {
-							cb(null, current_favs);
+						} else if (api_favs.length === 0) {
+							deferred.resolve(current_favs, true);
 						}
+					})
+					.fail(function() {
+						deferred.resolve(current_favs, true);
 					});
 				} else {
-					getFromApi(req.session, function(err, api_favs) {
+					getFromApi(req.session)
+					.then(function(api_favs) {
 						console.log('nothing found, saving from api and loading the rest')
-						if (!err && api_favs.length) {
-							save_cb(null, api_favs, function(err2) {
-								if (!err2) {
-									jobs.create('download all favorites', {
-										session: req.session,
-										user_id: user_id,
-										start_id: api_favs[api_favs.length-1].id_str,
-										total_count: req.session.user.favourites_count - api_favs.length
-									}).save();
-									render_cb(null);
-								}
-							});
+						if (api_favs.length) {
+							jobs.create('download all favorites', {
+								session: req.session,
+								user_id: user_id,
+								start_id: api_favs[api_favs.length-1].id_str,
+								total_count: req.session.user.favourites_count - api_favs.length
+							}).save();
+							deferred.resolve(api_favs, false);
 						}
-
+					})
+					.fail(function() {
+						deferred.resolve([], true);
 					});
 				}
+			})
+			.fail(function() {
+				deferred.resolve([], true);
 			});
-		}
 
-		/* save in db after rendering but before redirecting */
-		function save_cb(s_err, list, cb) {
-			if (!s_err) {
-				redsindex(list, req.session.user.id_str);
-				render(list, function(e, favs) {
-					var c = (typeof cb === 'function') ? cb : render_cb;
-					db.set(req.session.user.id_str, favs, c);
-				});
-			}
-		}
-
-		/* index the new favorites */
-		function redsIndex_cb(f_err, list) {
-			if (!f_err) {
-				/* index important values from favorite object */
-				redsindex(list, req.session.user.id_str); //verify if this is blocking and should be done async
-				/* format favorite object to pull out only relevant info to send client */
-				render(list, render_cb);
-			}
-		}
-
-		/* format the favorites to make only needed fields available to client */
-		function render_cb(r_err, favs) {
-			res.redirect('/');
-/*			if (!r_err) {
-				res.redirect('/');
-			} else res.redirect('/logout');
-*/
+			return deferred.promise;
 		}
 	},
-
 	twitter_login: function(req, res, next) {
 		var oauth = {
 			callback: config.home_url + config.twitter.callback,
@@ -183,7 +179,7 @@ exports.routes = {
 	},
 
 	logout: function(req, res, next) {
-		if (req.session && req.session.user) cache[req.session.user.id_str] = null;
+		//if (req.session && req.session.user) cache[req.session.user.id_str] = null;
 		req.session = null;
 		res.render('home', {user: ''});
 	},
@@ -236,183 +232,34 @@ exports.routes = {
 
 	/* GET /search?q='query string' */
 	search: function(req, res, next) {
-		var q, resp_msg;
+		var q, resp_msg, x;
+		var user_id = req.session.user.id_str;
 
 		if (queries['_'+user_id]) q = queries['_'+user_id];
 		else res.json([]);
 
 		if (req.query.q && req.query.q.length) {
-			q.query(req.query.q, function(e, ids) {
-				if (!e) {
-					db.get_multi(user_id, ids, function(e, resp) {
-						if (!e) {
-							resp_msg = q.sortBy(resp, 'created_at', 'date_desc');
-						} else {
-							resp_msg = [];
-						}
-						res.json(resp_msg);
-					});
-				}
-			});
+			q.query(req.query.q)
+			.then(function(ids) {
+				console.log('return query: ', e, ids)
+				db.get_multi(user_id, ids, function(e, resp) {
+					if (!e) {
+						resp_msg = q.sortBy(resp, 'created_at', 'date_desc');
+					} else {
+						resp_msg = [];
+					}
+					res.json(resp_msg);
+				});
+			})
+			.fail(function(err) {
+				res.json(err);
+			})
+			.done();
 		}
 	}
 
 };
 
-/*
-*  WebSockets command parsing and routing
-*/
-/*
-exports.wsroutes = {
-	init: function(msg, socket) {
-		var resp_msg = {};
-		if (socket.handshake.sid) {
-			crypto.randomBytes(128, function(e, b){
-				if (!e) {
-					resp_msg.status = 'ok';
-					resp_msg.data = { token: b.toString('base64') };
-					cache[resp_msg.data.token] = socket.handshake.sid;  //save the ws session id with the user id
-				} else {
-					resp_msg.status = 'error';
-					resp_msg.error = 'failed to create session token';
-				}
-				return socket.emit('init', resp_msg);
-			});
-		}
-	},
-	
-	get_favorites: function(msg, socket) {
-		var user_id = '', sid = '', resp_msg = {};
-		console.log('MSG: ',msg)
-
-		if (msg.token) {
-			sid = cache[msg.token];
-			if (sid === socket.handshake.sid) {
-				user_id = socket.handshake.user_id;
-				resp_msg.token = msg.token;
-
-				if (!queries['_'+user_id]) queries['_'+user_id] = new search(user_id);
-
-				if (msg.params.start_id || msg.params.end_id) {
-					db.get_by_id(user_id, msg.params, function(err, resp) {
-						if (!err) {
-							var temp_id = msg.params.start_id || msg.params.end_id;
-							resp_msg.status = 'ok';
-							resp_msg.data = resp.filter(function(i) {
-								if (i.id_str !== temp_id) return true;
-							});
-							socket.emit('get_favorites', resp_msg);
-						} else {
-							resp_msg.status = 'error';
-							resp_msg.error = err.message;
-							socket.write('get_favorites', resp_msg);
-						}
-					});
-				} else {
-					db.get(user_id, msg.params, function(err, resp) {
-						if (!err) {
-							resp_msg.status = 'ok';
-							resp_msg.data = resp;
-							socket.emit('get_favorites', resp_msg);
-						} else {
-							resp_msg.status = 'error';
-							resp_msg.error = err.message;
-							socket.write('get_favorites', resp_msg);
-						}
-					});
-				}
-			}
-		}
-	},
-
-	get_embed: function(msg, socket) {
-		var sid = '', resp_msg = {};
-		if (msg.token) {
-			sid = cache[msg.token];
-			if (sid === socket.handshake.sid) {
-				resp_msg.token = msg.token;
-				getEmbededMedia(msg.params, function(err, resp) {
-					if (!err) {
-						resp_msg.status = 'ok';
-						resp_msg.data = resp;
-					} else {
-						resp_msg.status = 'error';
-						resp_msg.error = err.message;
-					}
-					socket.emit('get_embed', resp_msg);
-				});
-			}
-		}
-	},
-	
-	remove_favorite: function(msg, socket) {
-		var sid = '', user_id = '', resp_msg = {};
-		if (msg.token) {
-			sid = cache[msg.token];
-			if (sid === socket.handshake.sid) {
-				user_id = socket.handshake.user_id;
-				resp_msg.token = msg.token;
-				removeFavorites(user_id, socket.handshake.oauth, msg.params.id, function(err, resp) {
-					if (!err) {
-						resp_msg.status = 'ok';
-						resp_msg.data = null;
-					} else {
-						resp_msg.status = 'error';
-						resp_msg.error = err.message;
-					}
-					socket.emit('remove_favorite', resp_msg);
-				});
-			}
-		}
-	},
-
-	search: function(msg, socket) {
-		var sid = '', user_id = '', resp_msg = {}, q;
-		if (msg.token) {
-			sid = cache[msg.token];
-			if (sid === socket.handshake.sid) {
-				user_id = socket.handshake.user_id;
-				if (queries['_'+user_id]) q = queries['_'+user_id];
-				else {
-					resp_msg.status = 'error';
-					resp_msg.data = 'Search failed - could not retreive search index';
-					return socket.emit('search', resp_msg);
-				}
-				resp_msg.token = msg.token;
-				if (msg.params.q && msg.params.q.length) {
-					q.query(msg.params.q).then(function(ids) {
-						db.get_multi(user_id, ids, function(e, resp) {
-							resp_msg.status = 'ok';
-							resp_msg.data = q.sortBy(resp, 'created_at', 'date_desc');
-							return socket.emit('search', resp_msg);
-						});
-					}, function(e) {
-						resp_msg.status = 'error';	
-						resp_msg.data = 'Search failed - ' + e;
-						return socket.emit('search', resp_msg);
-					});
-/*					q.query(msg.params.q, function(e, ids) {
-						if (!e) {
-							db.get_multi(user_id, ids, function(e, resp) {
-								if (!e) {
-									resp_msg.status = 'ok';
-									resp_msg.data = q.sortBy(resp, 'created_at', 'date_desc');
-									//resp_msg.data = resp;
-								} else {
-									resp_msg.status = 'error';	
-									resp_msg.data = 'Search failed - ' + e;
-								}
-								return socket.emit('search', resp_msg);
-							});
-						}
-					});
-*/					
-				}
-			}
-		}
-	}
-}
-*/
 
 /*
 *  Helper functions
@@ -425,31 +272,34 @@ exports.wsroutes = {
 * @params: parameters to pass to the api call
 * @cb: callback - return json object of favorites array from twitter or error
 */
-function getFromApi(req, params, cb) {
-	var sess = req.session || req;
-	var name = sess.access_token.screen_name;
-	var u = config.twitter.base_url + '/favorites/list.json?';
-	var x = {
+function getFromApi(req, params) {
+	var sess = req.session || req
+	  , deferred = Q.defer()
+	  , name = sess.access_token.screen_name
+	  , u = config.twitter.base_url + '/favorites/list.json?'
+	  , x = {
 		user_id: sess.user.id_str,
 		include_entities: true
 	};
 
-	if (typeof params === 'function') {
-		cb = params;
+	if (!params || !params.count) {
 		params = { count: 20 };
 	}
 	
 	util._extend(x, params);
 	u += qs.stringify(x);
-	r.get({url: u, oauth: sess.oauth, json: true}, function(err, resp, body) {
-		if (!err && resp.statusCode === 200) {
-			return cb(null, body);
-		} else {
-			if (err) return cb(err);
-			else if (err instanceof Error) return cb(new Error(err));
-			else return cb(new Error(body.errors[0].message));
-		}
+	//r.get({url: u, oauth: sess.oauth, json: true}, function(err, resp, body) {
+	Q.nfcall(r.get, {url: u, oauth: sess.oauth, json: true})
+	.then(function(resp) {
+		if (resp[0].statusCode === 200) deferred.resolve(resp[0].body);
+	})
+	.fail(function(err) {
+		if (err) deferred.reject(err);
+		else if (err instanceof Error) deferred.reject(new Error(err));
+		else deferred.reject(new Error(body.errors[0].message));
 	});
+
+	return deferred.promise;
 }
 
 /*
@@ -528,8 +378,7 @@ function getEmbededMedia(item, cb) {
 	});
 }
 
-function render(list, cb) {
-  process.nextTick(function() {
+function render(list) {
     if (list.length > 0) {
       if (list[0].id) {
         var newlist = list.map(function(v, i) {
@@ -548,12 +397,11 @@ function render(list, cb) {
             id_str: v.id_str
           }
         });
-        return cb(null, newlist);
+        return newlist;
       } else {
-        return cb(null, list);
+        return list;
       }
-    } else return cb(null, []);
-  });
+    } else return [];
 }
 
 /*

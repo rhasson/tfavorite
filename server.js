@@ -41,6 +41,7 @@ server.get('/auth_cb', routes.auth_cb);
 
 server.get('/favorite/:id', routes.get_favorite);
 server.delete('/favorite/:id', routes.remove_favorite);
+server.get('/favorite', routes.get_favorite);
 
 server.get('/embed/:id', routes.get_embed);
 

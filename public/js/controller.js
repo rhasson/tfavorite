@@ -122,7 +122,7 @@ FaviousApp.directive('favBody', function($filter) {
 });
 
 /* create a data-fav-item directive which wraps every tweet */
-FaviousApp.directive('favItem', function(red_embeds, $filter) {
+FaviousApp.directive('favItem', function(res_embeds, $filter) {
 
 	var linkFn = function(scope, element, attr) {
 		//setup event handler
