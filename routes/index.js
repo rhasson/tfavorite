@@ -56,8 +56,13 @@ exports.routes = {
 				}
 			})
 			.then(function(favlist, saved) {
+				console.log('CHECK: ', favlist, saved)
+				if (!queries['_'+req.session.user.id_str]) queries['_'+req.session.user.id_str] = new search(req.session.user.id_str);
 				/* index important values from favorite object */
-				Q.fcall(redsindex, favlist, req.session.user.id_str); //verify if this is blocking and should be done async
+				
+				/*** TODO: move to a worker thread ***/
+				Q.fcall(redsindex, favlist, req.session.user.id_str, queries['_'+req.session.user.id_str]); //verify if this is blocking and should be done async
+				
 				/* format favorite object to pull out only relevant info to send client */
 				Q.fcall(render, favlist)
 				.then(function(newlist) {
@@ -103,9 +108,9 @@ exports.routes = {
 		function checkFavorites() {
 			var params = {}
 			  , user_id = req.session.user.id_str
-			  , deferred = Q.defer();
+			  , def = Q.defer();
 
-			Q.nfcall(db.get, user_id)
+			db.get(user_id)
 			.then(function(current_favs) {
 				if (current_favs.length) {
 					getFromApi(req.session)
@@ -113,7 +118,7 @@ exports.routes = {
 						if (api_favs.length) {
 							if (current_favs[0].id_str === api_favs[0].id_str) {
 								console.log('ids match, return from db')
-								deferred.resolve(current_favs, true);
+								def.resolve(current_favs, true);
 							} else {
 								console.log('ids didnt match, save from api')
 								jobs.create('download all favorites', {
@@ -123,14 +128,16 @@ exports.routes = {
 									start_id: current_favs[0].id_str,
 									end_id: api_favs[0].id_str
 								}).save();
-								deferred.resolve(api_favs, false);
+								def.resolve(api_favs, false);
 							}
 						} else if (api_favs.length === 0) {
-							deferred.resolve(current_favs, true);
+							console.log('nothing returned by api, returning favs from db')
+							def.resolve(current_favs, true);
 						}
 					})
 					.fail(function() {
-						deferred.resolve(current_favs, true);
+						console.log('failed to get from api, returning favs from db')
+						def.resolve(current_favs, true);
 					});
 				} else {
 					getFromApi(req.session)
@@ -143,19 +150,20 @@ exports.routes = {
 								start_id: api_favs[api_favs.length-1].id_str,
 								total_count: req.session.user.favourites_count - api_favs.length
 							}).save();
-							deferred.resolve(api_favs, false);
+							def.resolve(api_favs, false);
 						}
 					})
 					.fail(function() {
-						deferred.resolve([], true);
+						def.resolve([], true);
 					});
 				}
 			})
-			.fail(function() {
-				deferred.resolve([], true);
+			.fail(function(e) {
+				console.log('FAILED: ', e)
+				def.resolve([], true);
 			});
 
-			return deferred.promise;
+			return def.promise;
 		}
 	},
 	twitter_login: function(req, res, next) {
@@ -188,74 +196,80 @@ exports.routes = {
 	get_favorite: function(req, res, next) {
 		var user_id = req.session.user.id_str
 			, resp_msg
-			, q = req.query;
+			, q = req.query || {};
 
-		if (req.params.id || q) {
-			q.start = req.params.id;
-			db.get_by_id(user_id, q, function(err, resp) {
-				if (!err) {
-					resp_msg = resp.filter(function(i) {
-						if (i.id_str !== q.start || i.id_str !== q.end) return true;
-					});
-					res.json(resp_msg);
-				} else {
-					console.log('Failed to get favorites: ' +err.message);
-					res.json([]);
-				}
+		if (req.params.id) {
+			q.start_id = req.params.id;
+			db.get_by_id(user_id, q)
+			.then(function(resp) {
+				resp_msg = resp.filter(function(i) {
+					if (i.id_str !== q.start || i.id_str !== q.end) return true;
+				});
+				res.json(resp_msg);
+			})
+			.fail(function(err) {
+				console.log('Failed to get favorites: ' +err.message);
+				res.json([]);
 			});
 		} else {
-			db.get(user_id, q, function(err, resp) {
-				!err ? res.json(resp) : res.json([]);
+			db.get(user_id, q)
+			.then(function(resp) {
+				res.json(resp)
+			})
+			.fail(function(err) {
+				res.json([]);
 			});
 		}
-
-		if (!queries['_'+user_id]) queries['_'+user_id] = new search(user_id);
 	},
 
 	/* GET /embed/1212&url='http://....'&maxwidth='200' */
 	get_embed: function(req, res, next) {
-		getEmbededMedia(req.query, function(err, data) {
-			var a = [];
-			a.push(data);
-			!err ? res.json(a) : res.json([]);
+		getEmbededMedia(req.query)
+		.then(function(resp) {
+			var a = new Array(resp);
+			res.json(a);
+		})
+		.fail(function(err) {
+			res.json([]);
 		});
 	},
 
 	/* DELETE /favorite/1212 */
 	remove_favorite: function(req, res, next) {
-		removeFavorite(req.session.oauth, req.params.id, function(err, resp) {
-			var a = [];
-			a.push(resp);
-			!err ? res.json(a) : res.json([]);
+		removeFavorite(req.session.user.id_str, req.session.oauth, req.params.id)
+		.then(function(resp) {
+			res.json(true);
+		})
+		.fail(function(err) {
+			res.json(false);
 		});
 	},
 
 	/* GET /search?q='query string' */
 	search: function(req, res, next) {
-		var q, resp_msg, x;
+		var s, resp_msg;
 		var user_id = req.session.user.id_str;
 
-		if (queries['_'+user_id]) q = queries['_'+user_id];
+		if (queries['_'+user_id]) s = queries['_'+user_id];
 		else res.json([]);
 
-		if (req.query.q && req.query.q.length) {
-			q.query(req.query.q)
+		if ('q' in req.query) {
+			s.query(req.query.q)
 			.then(function(ids) {
-				console.log('return query: ', e, ids)
-				db.get_multi(user_id, ids, function(e, resp) {
-					if (!e) {
-						resp_msg = q.sortBy(resp, 'created_at', 'date_desc');
-					} else {
-						resp_msg = [];
-					}
+				db.get_multi(user_id, ids)
+				.then(function(resp) {
+					resp_msg = s.sortBy(resp, 'created_at', 'date_desc');
 					res.json(resp_msg);
-				});
+				})
+				.fail(function(err) {
+					res.json([]);
+				})
 			})
 			.fail(function(err) {
 				res.json(err);
-			})
-			.done();
+			});
 		}
+		else res.json([]);
 	}
 
 };
@@ -307,27 +321,30 @@ function getFromApi(req, params) {
 *  @user_id: user id
 *  @id: favorite id from Twitter
 */
-function removeFavorites(user_id, oauth, id, cb) {
-	var u;
+/* TODO: handle several ids to delete */
+function removeFavorites(user_id, oauth, id) {
+	var u
+	  , def = Q.defer();
 
-	if (typeof id === 'fuction') {
-		cd = id;
-		return cb(new Error('missing id'));
-	}
-	if (user_id) {
-		u = config.twitter.base_url + '/favorites/destroy.json';
-		r.post({url: u, oauth: oauth, body: 'id='+id, json: true}, function(err, resp, body) {
-			if (!err && resp.statusCode === 200) {
-				db.del(user_id, id, function(e) {
-					return cb(e, body);
-				});
-			} else {
-				if (err) return cb(err);
-				else if (err instanceof Error) return cb(new Error(err));
-				else return cb(new Error(body.errors[0].message));
-			}
-		});
-	}
+	u = config.twitter.base_url + '/favorites/destroy.json';
+	Q.nfcall(r.post, {url: u, oauth: oauth, body: 'id='+id, json: true})
+	.then(function(resp) {
+		if (resp[0].statusCode === 200) {
+			var i = new Array(id);
+			db.del(user_id, i)
+			.then(function() {
+				return def.resolve();
+			})
+			.fail(function(err) {
+				return def.reject(err);
+			});
+		}
+	})
+	.fail(function(err) {
+		return def.reject(err);
+	});
+
+	return def.promise;
 }
 
 /*
@@ -349,13 +366,14 @@ function sortList(method, list, cb) {
 */
 function getEmbededMedia(item, cb) {
 	var oembed
-		,	u = ''
-		, host = url.parse(item.url).host
-		,	o = {
-				url: item.url,
-				maxwidth: item.maxwidth//435,
-				//maxheight: 244
-			};
+	  , def = Q.defer()
+	  , u = ''
+	  , host = url.parse(item.url).host
+	  ,	o = {
+			url: item.url,
+			maxwidth: item.maxwidth//435,
+			//maxheight: 244
+		};
 	
 	if (host.match(/vimeo.com/ig)) {
 		u = config.vimeo.oembed_url + '?' + qs.stringify(o);
@@ -365,17 +383,18 @@ function getEmbededMedia(item, cb) {
 	} else if (host.match(/instagr.am|instagram/)) {
 		u = config.instagram.oembed_url + '?' + qs.stringify(o);
 	}
-	else return cb(null, {});
+	else return def.resolve({});
 	
-	r.get({url: u, json: true}, function(err, resp, body) {
-		if (!err && resp.statusCode === 200) {
-			return cb(null, body);
-		} else {
-			if (err) return cb(err);
-			else if (err instanceof Error) return cb(new Error(err));
-			else return cb(new Error(body.errors[0].message));
-		}
+	Q.nfcall(r.get, {url: u, json: true})
+	.then(function(resp) {
+		if (resp[0].statusCode === 200) return def.resolve(resp[0].body);
+		else return def.resolve([]);
+	})
+	.fail(function(err) {
+		return (err instanceof Error) ? def.reject(err) : def.reject(new Error(err));
 	});
+
+	return def.promise;
 }
 
 function render(list) {
@@ -408,9 +427,9 @@ function render(list) {
 * index important text elemnts into a search index for the particular user
 * @ary: array of favorite object directly from twitter api
 * @user_id: user id of the logged in user
+* @s: search instance
 */
-function redsindex(ary, user_id) {
-	var s = new search(user_id, {load: false});
+function redsindex(ary, user_id, s) {
 	ary.forEach(function(item, i) {
 		s.index(item.text, item.id_str);
 		s.index(item.user.name, item.id_str);
