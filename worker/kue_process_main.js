@@ -9,7 +9,7 @@ var redis = require('redis'),
   base_url = require('../config').config.twitter.base_url;
 
 jobs.process('download all favorites', 5, function(job, done) {
-  console.log('Kue child has began processing for: ', job.data);
+  console.log('Download child process started for: ', job.data.user_id);
   var s = new search(job.data.user_id, {load: false});
   var couch_obj;
   
@@ -86,6 +86,15 @@ jobs.process('download all favorites', 5, function(job, done) {
     });
   }
 });
+
+
+jobs.process('index favorites', 2, function(job, done) {
+  console.log('Index child process started for: ', job.data.user_id);
+  var s = new search(job.data.user_id, {load: false});
+  redsindex(s, job.data.items, job.data.user_id);
+  s.update().then(function() { done(); });
+});
+
 
 /**************************************************************************************/
 

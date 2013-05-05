@@ -56,12 +56,15 @@ exports.routes = {
 				}
 			})
 			.then(function(favlist, saved) {
-				console.log('CHECK: ', favlist, saved)
 				if (!queries['_'+req.session.user.id_str]) queries['_'+req.session.user.id_str] = new search(req.session.user.id_str);
 				/* index important values from favorite object */
 				
 				/*** TODO: move to a worker thread ***/
-				Q.fcall(redsindex, favlist, req.session.user.id_str, queries['_'+req.session.user.id_str]); //verify if this is blocking and should be done async
+				//Q.fcall(redsindex, favlist, req.session.user.id_str, queries['_'+req.session.user.id_str]); //verify if this is blocking and should be done async
+				jobs.create('index favorites', {
+					user_id: req.session.user.id_str,
+					items: favlist
+				}).save();
 				
 				/* format favorite object to pull out only relevant info to send client */
 				Q.fcall(render, favlist)
