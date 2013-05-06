@@ -62,8 +62,7 @@ exports.routes = {
 				/*** TODO: move to a worker thread ***/
 				//Q.fcall(redsindex, favlist, req.session.user.id_str, queries['_'+req.session.user.id_str]); //verify if this is blocking and should be done async
 				jobs.create('index favorites', {
-					user_id: req.session.user.id_str,
-					items: favlist
+					user_id: req.session.user.id_str
 				}).save();
 				
 				/* format favorite object to pull out only relevant info to send client */
@@ -113,7 +112,7 @@ exports.routes = {
 			  , user_id = req.session.user.id_str
 			  , def = Q.defer();
 
-			db.get(user_id)
+			db.get(user_id, {count: 1})
 			.then(function(current_favs) {
 				if (current_favs.length) {
 					getFromApi(req.session)
@@ -255,12 +254,12 @@ exports.routes = {
 
 		if (queries['_'+user_id]) s = queries['_'+user_id];
 		else res.json([]);
-
 		if ('q' in req.query) {
 			s.query(req.query.q)
 			.then(function(ids) {
 				db.get_multi(user_id, ids)
 				.then(function(resp) {
+					console.log(resp)
 					resp_msg = s.sortBy(resp, 'created_at', 'date_desc');
 					res.json(resp_msg);
 				})

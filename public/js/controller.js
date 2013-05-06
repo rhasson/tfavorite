@@ -12,6 +12,7 @@ FaviousApp.controller('favListCtrl', function($scope, $timeout, res_favorites, r
 	var old_list, interval=null, searching=false;
 
 	$scope.$watch('query', function(query, oldval) {
+		if (!searching) old_list = $scope.list;
 		if (query !== undefined && query !== '' && query !== ' ') {
 			searching = true;
 			window.clearTimeout(interval);

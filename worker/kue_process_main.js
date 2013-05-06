@@ -91,8 +91,14 @@ jobs.process('download all favorites', 5, function(job, done) {
 jobs.process('index favorites', 2, function(job, done) {
   console.log('Index child process started for: ', job.data.user_id);
   var s = new search(job.data.user_id, {load: false});
-  redsindex(s, job.data.items, job.data.user_id);
-  s.update().then(function() { done(); });
+  db.get(job.data.user_id)
+  .then(function(items) {
+    redsindex(s, items, job.data.user_id);
+    done();
+  })
+  .fail(function(err) {
+    done(new Error(err));
+  });
 });
 
 
