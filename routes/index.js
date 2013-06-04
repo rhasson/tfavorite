@@ -47,7 +47,7 @@ exports.routes = {
 				/* get user details after auth completes */
 				return postAuthHandler(resp[0].statusCode, resp[0].body);
 			})
-			.then(function(resp) {
+			.then(function(resp) {  /* if got token, get favorites from twitter */
 				if (resp[0].statusCode === 200) {
 					req.session.user = resp[0].body;
 					return checkFavorites();
@@ -62,7 +62,8 @@ exports.routes = {
 				/*** TODO: move to a worker thread ***/
 				//Q.fcall(redsindex, favlist, req.session.user.id_str, queries['_'+req.session.user.id_str]); //verify if this is blocking and should be done async
 				jobs.create('index favorites', {
-					user_id: req.session.user.id_str
+					user_id: req.session.user.id_str,
+					s: queries['_'+req.session.user.id_str]
 				}).save();
 				
 				/* format favorite object to pull out only relevant info to send client */
