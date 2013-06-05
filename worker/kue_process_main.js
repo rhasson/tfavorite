@@ -154,31 +154,31 @@ function render(list) {
 * @user_id: user id of the logged in user
 */
 function redsindex(s, ary, user_id) {
-  ary.forEach(function(item, i) {
-    s.index(item.text, item.id_str);
-    s.index(item.user.name, item.id_str);
-    s.index(item.user.screen_name, item.id_str);
-/*    if (item.user.place) {
-      s.index(item.user.place.full_name, item.id_str);
-      s.index(item.user.place.country, item.id_str);
-    }
-*/
-    if (item.entities.urls.length) {
-      item.entities.urls.forEach(function(u) {
-        s.index(u.expanded_url, item.id_str);
-      });
-    }
-    if (item.entities.hashtags.length) {
-      item.entities.hashtags.forEach(function(h) {
-        s.index(h.text, item.id_str);
-      });
-    }
-    if (item.entities.user_mentions.length) {
-      item.entities.user_mentions.forEach(function(m) {
-        s.index(m.name, item.id_str);
-        s.index(m.screen_name, item.id_str);
-      });
-    }
+  s.index(function(idx, done) {
+    ary.forEach(function(item, i) {
+      var id = item.id_str
+      idx.add(item.text, id)
+         .add(item.user.name, id)
+         .add(item.user.screen_name, id);
+
+      if (item.entities.urls.length) {
+        item.entities.urls.forEach(function(u) {
+          idx.add(u.expanded_url, id);
+        });
+      }
+      if (item.entities.hashtags.length) {
+        item.entities.hashtags.forEach(function(h) {
+          idx.add(h.text, item.id_str);
+        });
+      }
+      if (item.entities.user_mentions.length) {
+        item.entities.user_mentions.forEach(function(m) {
+          idx.add(m.name, item.id_str)
+             .add(m.screen_name, item.id_str);
+        });
+      }
+    });
+    done();
   });
 }
 
